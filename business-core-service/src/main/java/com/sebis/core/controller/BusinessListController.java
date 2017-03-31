@@ -1,19 +1,24 @@
 package com.sebis.core.controller;
 
+import com.sebis.core.model.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.cloud.netflix.eureka.EurekaDiscoveryClient;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.ModelAndView;
+
+import java.util.stream.Collectors;
 
 @RefreshScope
 @RestController
 public class BusinessListController {
 
     @Autowired
-    EurekaDiscoveryClient discoveryClient;
+    private EurekaDiscoveryClient discoveryClient;
     
     @Value("${name}")
     private String serviceName;
@@ -23,15 +28,23 @@ public class BusinessListController {
         return this.serviceName;
     }
 
-    @RequestMapping("/businesses/list")
+    @RequestMapping(value = { "/businesses/list" }, method = RequestMethod.GET)
     @ResponseBody
-    public String getServices() {
-        StringBuilder builder = new StringBuilder("");
-    	discoveryClient.getServices()
-                .stream()
-                .filter(service -> service.endsWith("mobility-service"))
-                .forEach(builder::append);
-        return builder.toString();
+    public ModelAndView getServices() {
+        ModelAndView model = new ModelAndView();
+        model.addObject(
+                "services",
+                discoveryClient
+                        .getServices()
+                        .stream()
+                        .filter(service -> service.endsWith("mobility-service"))
+                        .map(service ->
+                                new Service(
+                                        service,
+                                        String.format("%s/routes", service))).collect(Collectors.toList())
+        );
+        model.setViewName("service");
+        return model;
     }
     
 }

@@ -11,7 +11,8 @@ public class AccessController {
     @ResponseBody
     public ModelAndView welcomePage() {
         ModelAndView model = new ModelAndView();
-        model.setViewName("home");
+        // model.setViewName("home");
+        model.setViewName("redirect:/business-core-service/businesses/list");
         return model;
     }
     
