@@ -15,5 +15,4 @@ public class TravelCompanionMobilityServiceApplicationTests {
 	@Test
 	public void contextLoads() {
 	}
-
 }

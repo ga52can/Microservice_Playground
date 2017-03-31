@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/thymeleaf-extras-springsecurity4">
+<head>
+    <meta charset="UTF-8"/>
+    <title>DriveNow - Find your ride</title>
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+    <link href="http://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.6.3/css/bootstrap-select.min.css" rel="stylesheet"/>
+
+    <!-- jQuery library -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
+
+    <!-- Latest compiled JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.6.3/js/bootstrap-select.min.js"></script>
+    <style th:inline="text">
+        .results-div {
+            border: 1px solid #dddddd;
+            border-radius: 4px 4px 0 0;
+            margin-top: 50px;
+        }
+        .maps-distance {
+            margin-top: 20px;
+            padding-top: 1%;
+            padding-bottom: 5%;
+            padding-left: 5px;
+            height: 25px;
+            font-family: Monospaced,sans-serif;
+            font-size: medium;
+            background: rgba(0, 15, 64, 0.84);
+            color: white;
+        }
+        #span-distance {
+            height: 80%;
+            background: rgba(0, 177, 29, 0.84);
+            color: white;
+            padding: 0.5%;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <span></span>
+        <h1>Drive Now - Find your ride</h1>
+    </div>
+    <div class="row">
+        <div class="col-md-4">
+            <form id="travelform" th:action="@{/getroutes}" th:object="${travel}" method="post">
+                <div class="form-group">
+                    <label for="select_city_1">Origin: </label><br/>
+                    <select class="selectpicker form-control" id="select_city_1" th:field="*{origin}">
+                        <option th:value="${0}" data-hidden="true">Pick One</option>
+                        <option th:each="city : ${cities}"
+                                th:value="${city.getCityId()}"
+                                th:id="${city.getCityId()}"
+                                th:text="${city.getCityName()}"></option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="select_city_2">Destination: </label><br />
+                    <select class="selectpicker form-control" id="select_city_2" th:field="*{destination}">
+                        <option th:value="${0}" data-hidden="true">Pick One</option>
+                        <option th:each="city : ${cities}"
+                                th:value="${city.getCityId()}"
+                                th:id="${city.getCityId()}"
+                                th:text="${city.getCityName()}"></option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Search Routes</button>
+            </form>
+        </div>
+    </div>
+    <div class = "row">
+        <div id="results-div" style="display: none" class="col-md-6 results-div">
+            <table id = "results-table" class="table .table-hover">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Time</th>
+                    <th>Partner</th>
+                    <th>Cost</th>
+                    <th>Select</th>
+                </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    $(document).ready(function () {
+        $('#travelform').submit(function(e) {
+            e.preventDefault();
+            var str = $('#travelform').serialize();
+            console.log(str);
+            $.ajax({
+                type: "post",
+                data: str,
+                url: "/drivenow-mobility-service/getroutes",
+                async: true,
+                dataType: "json",
+                success: function (dat) {
+                    console.log("done");
+                    console.log(dat);
+                    $('#results-table > tbody').empty();
+                    var html = '';
+                    var routes = dat;
+                    for (var i = 0; i < routes.length; i++) {
+                        html += "<tr><th scope='row'>" + i + "</th>";
+                        html += "<td>" + routes[i].date + "</td>";
+                        html += "<td>" + routes[i].partner + "</td>";
+                        html += "<t" +
+                                "d>" + routes[i].cost + "</td>";
+                        html += "<td><button class = 'btn btn-success' type='submit' id='" + i + "'>Book</button></td>";
+                        html += "</tr>";
+                    }
+                    $('#results-table').find('> tbody:last-child').append(html);
+                    // $('#span-distance').text(dat.distance + " Km");
+                    $('#results-div').show();
+                },
+                error: function (err) {
+                    console.log(err);
+                }
+            })
+        });
+        //$('#myTable tr:last').after('<tr>...</tr><tr>...</tr>');
+    });
+    /*]]>*/
+</script>
+</body>
+</html>
