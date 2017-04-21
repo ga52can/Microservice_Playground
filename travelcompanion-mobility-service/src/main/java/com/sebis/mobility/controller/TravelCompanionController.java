@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.ModelAndView;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,7 +57,7 @@ public class TravelCompanionController {
 
     @RequestMapping(value = {"/routes", "/travelcompanion-mobility-service/routes"}, method = RequestMethod.GET)
     @ResponseBody
-    public ModelAndView showCities() {
+    public ModelAndView showCities(HttpServletRequest request) {
         ModelAndView model = new ModelAndView("route");
         List<City> cities =
                 jdbcTemplate.query(

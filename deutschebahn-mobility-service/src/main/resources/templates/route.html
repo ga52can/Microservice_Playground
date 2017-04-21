@@ -115,7 +115,12 @@
                         html += "<td>" + routes[i].partner + "</td>";
                         html += "<t" +
                                 "d>" + routes[i].cost + "</td>";
-                        html += "<td><button class = 'btn btn-success' type='submit' id='" + i + "'>Book</button></td>";
+                        var link = "/accounting-core-service/" +
+                                        routes[i].serviceProvider +
+                                        "/" + routes[i].routeId +
+                                        "/book";
+                        html += "<td>" +
+                                "<a href='" + link + "' class = 'btn btn-success' >Book</a></td>";
                         html += "</tr>";
                     }
                     $('#results-table').find('> tbody:last-child').append(html);

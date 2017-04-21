@@ -1,16 +1,16 @@
-package com.sebis.mobility.config;
+package com.sebis.core;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
 /**
- * Created by sohaib on 30/03/17.
+ * Created by sohaib on 31/03/17.
  */
 @Configuration
 public class MvcConfig extends WebMvcConfigurerAdapter {
@@ -20,7 +20,12 @@ public class MvcConfig extends WebMvcConfigurerAdapter {
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addViewController("/routes").setViewName("route");
+        registry.addViewController("/book").setViewName("book_result");
+    }
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 
     @Bean(name = "dataSource")
@@ -33,8 +38,4 @@ public class MvcConfig extends WebMvcConfigurerAdapter {
         return driverManagerDataSource;
     }
 
-    @Bean
-    public ObjectMapper objectMapper() {
-        return new CustomObjectMapper();
-    }
 }

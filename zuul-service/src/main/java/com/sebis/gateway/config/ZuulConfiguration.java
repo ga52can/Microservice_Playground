@@ -7,8 +7,9 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class ZuulConfiguration {
 
-    @Bean
+    /*@Bean
     public RestTemplate defaultRestTemplate() {
         return new RestTemplate();
-    }
+    }*/
+
 }

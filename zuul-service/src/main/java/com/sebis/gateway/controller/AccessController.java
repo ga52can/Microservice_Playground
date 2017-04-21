@@ -4,12 +4,14 @@ import org.springframework.web.bind.annotation.*;
 
 import org.springframework.web.servlet.ModelAndView;
 
+import javax.servlet.http.HttpServletRequest;
+
 @RestController
 public class AccessController {
 
     @RequestMapping(value = { "/", "/welcome**" }, method = RequestMethod.GET)
     @ResponseBody
-    public ModelAndView welcomePage() {
+    public ModelAndView welcomePage(HttpServletRequest request) {
         ModelAndView model = new ModelAndView();
         // model.setViewName("home");
         model.setViewName("redirect:/business-core-service/businesses/list");
