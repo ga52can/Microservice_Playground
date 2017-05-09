@@ -1,5 +1,8 @@
 package com.sebis.mobility.controller;
 
+import com.fasterxml.jackson.core.JsonGenerationException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.util.JSONPObject;
 import com.sebis.mobility.model.City;
 import com.sebis.mobility.model.Route;
 import com.sebis.mobility.model.RouteResults;
@@ -8,6 +11,7 @@ import org.apache.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -22,6 +26,7 @@ import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +48,9 @@ public class TravelCompanionController {
     private String driveNowUrl;
     @Value(("${deutsche-bahn-url}"))
     private String deutscheBahnUrl;
+
+    @Autowired
+    Tracer tracer;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -92,15 +100,23 @@ public class TravelCompanionController {
     @PostMapping(value = {"/getroutes", "/travelcompanion-mobility-service/getroutes"}, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     @CrossOrigin
-    public RouteResults getRoutes(@ModelAttribute Travel travel, HttpServletResponse response) {
+    public RouteResults getRoutes(@ModelAttribute Travel travel, HttpServletResponse response) throws IOException{
         RouteResults routeResults = new RouteResults();
 
-        ResponseEntity<HashMap> mapsResponse =
+        ResponseEntity<String> mapsResponse =
                 restTemplate.getForEntity(
                         mapsUrl + "/distance?origin={origin}&destination={destination}",
-                        HashMap.class, travel.getOrigin(), travel.getDestination());
+                        String.class, travel.getOrigin(), travel.getDestination());
         if (mapsResponse.getStatusCode() == HttpStatus.OK) {
-            routeResults.setDistance((double) mapsResponse.getBody().get("result"));
+            ObjectMapper mapper = new ObjectMapper();
+            try {
+                HashMap<String, Double> map = mapper.readValue(mapsResponse.getBody(), HashMap.class);
+                routeResults.setDistance(map.get("result"));
+            } catch (JsonGenerationException e) {
+                e.printStackTrace();
+            }
+
+
         }
         Future<List<Route>> driveNowRoutes = getRoutes(driveNowUrl, travel);
         Future<List<Route>> deutscheBahnRoutes = getRoutes(deutscheBahnUrl, travel);
