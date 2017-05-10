@@ -1,7 +1,5 @@
 server:
   port: ${PORT:5000}
-server:
-  address: vmmatthes22.informatik.tu-muenchen.de
 
 name: Service-BusinessCoreService
 
