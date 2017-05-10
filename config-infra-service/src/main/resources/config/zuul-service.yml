@@ -1,4 +1,7 @@
-server: port:${PORT:9000}
+server:
+  port: ${PORT:9000}
+server:
+  address: http://vmmatthes2.informatik.tu-muenchen.de
 name: Zuul proxy
 spring:
   cloud:
