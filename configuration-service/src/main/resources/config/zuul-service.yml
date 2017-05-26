@@ -4,8 +4,10 @@ name: Zuul proxy
 spring:
   cloud:
     stream:
-      bindings:
-        output: profiles
+      bindings:        
+        output: 
+          binder: kafka
+          destination: profiles
 eureka:
   instance:
     metadataMap:
@@ -21,4 +23,4 @@ hystrix:
 ribbon:
   ReadTimeout: 100000
   ConnectTimeout: 100000
-spring.sleuth.sampler.percentage: 1.0 
+spring.sleuth.sampler.percentage: 1.0
