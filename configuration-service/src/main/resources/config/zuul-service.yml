@@ -1,13 +1,13 @@
 server:
   port: ${PORT:9000}
 name: Zuul proxy
-spring:
-  cloud:
-    stream:
-      bindings:        
-        output: 
-          binder: kafka
-          destination: profiles
+#spring:
+#  cloud:
+#    stream:
+#      bindings:        
+#        output: 
+#          binder: kafka
+#          destination: profiles
 eureka:
   instance:
     metadataMap:
