@@ -4,12 +4,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.sebis</groupId>
-    <artifactId>deutschebahn-mobility-service</artifactId>
+    <artifactId>Mysql_InfluxDB_Transfer_Service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>deutschebahn-mobility-service</name>
-    <description>DeutscheBahn-Mobilityservice</description>
+    <name>Mysql_InfluxDB_Transfer_Service</name>
+    <description>Mysql_InfluxDB_Transfer_Service</description>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -37,10 +37,6 @@
             <artifactId>spring-cloud-starter-config</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-eureka</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
@@ -60,7 +56,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
-
+        <dependency>
+            <groupId>com.github.miwurster</groupId>
+            <artifactId>spring-data-influxdb</artifactId>
+            <version>1.5</version>
+        </dependency>
+        <dependency>
+            <groupId>org.influxdb</groupId>
+            <artifactId>influxdb-java</artifactId>
+            <version>2.5</version>
+        </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
