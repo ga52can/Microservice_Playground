@@ -81,6 +81,7 @@ public class TransferSpansTask {
                     .addField("endpoint_ipv6", span.getEndpoint_ipv6())
                     .addField("endpoint_port", span.getEndpoint_port())
                     .addField("endpoint_service_name", span.getEndpoint_service_name() == null ? "" : span.getEndpoint_service_name())
+                    .addField("a_number", 1)
                     .build();
             influxDBTemplate.write(point1);
             jdbcTemplate.update(
