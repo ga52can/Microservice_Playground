@@ -7,7 +7,7 @@
 	<artifactId>zipkinmysql</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
-+
+
 	<name>zipkinmysql</name>
 	<description>Demo project for Spring Boot</description>
 
@@ -41,7 +41,10 @@
 
 		<!-- For external service config end !-->
 
-
+		<dependency>
+			<groupId>io.zipkin.java</groupId>
+			<artifactId>zipkin-autoconfigure-storage-mysql</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter</artifactId>
@@ -50,17 +53,13 @@
 		<dependency>
 			<groupId>io.zipkin.java</groupId>
 			<artifactId>zipkin-server</artifactId>
+			<version>1.26.0</version>
 		</dependency>
 
 		<dependency>
 			<groupId>io.zipkin.java</groupId>
 			<artifactId>zipkin-autoconfigure-ui</artifactId>
 			<scope>runtime</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>io.zipkin.java</groupId>
-			<artifactId>zipkin-autoconfigure-storage-mysql</artifactId>
 		</dependency>
 
 		<dependency>
@@ -78,7 +77,10 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-eureka</artifactId>
+        </dependency>
 		<!--
 		<dependency>
 			<groupId>com.h2database</groupId>
