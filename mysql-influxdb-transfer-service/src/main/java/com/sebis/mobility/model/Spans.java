@@ -1,10 +1,12 @@
 package com.sebis.mobility.model;
 
+import com.sebis.mobility.SpanKeys;
 import org.joda.time.DateTime;
 
 import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.IdClass;
+import java.io.Serializable;
 import java.sql.Timestamp;
 
 /**
@@ -12,20 +14,21 @@ import java.sql.Timestamp;
  */
 
 @Entity
+@IdClass(SpanKeys.class)
 public class Spans {
-    private long trace_id;
+    @Id private long trace_id;
     @Id private long span_id;
     private String name;
     private long parent_id;
     private long start_ts;
     private long duration;
-    private String a_key;
-    private String a_value;
+    @Id private String a_key;
+    @Id private String a_value;
     private long a_type;
     private long endpoint_ipv4;
     private long endpoint_ipv6;
     private int endpoint_port;
-    private long a_timestamp;
+    @Id private long a_timestamp;
     private String endpoint_service_name;
 
     public Spans() {}
