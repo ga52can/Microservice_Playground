@@ -2,7 +2,6 @@ package com.sebis.mobility.controller;
 
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.util.JSONPObject;
 import com.sebis.mobility.model.City;
 import com.sebis.mobility.model.Route;
 import com.sebis.mobility.model.RouteResults;

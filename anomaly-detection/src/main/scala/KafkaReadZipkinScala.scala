@@ -25,6 +25,7 @@ object KafkaReadZipkinScala {
 
     sparkConf.registerKryoClasses(Array(classOf[Span]))
     sparkConf.registerKryoClasses(Array(classOf[Spans]))
+    sparkConf.registerKryoClasses(Array(classOf[java.util.Map[String, String]]))
     
     val ssc = new StreamingContext(sparkConf, Seconds(5))
     ssc.checkpoint("checkpoint")
@@ -38,16 +39,13 @@ object KafkaReadZipkinScala {
       "enable.auto.commit" -> (false: java.lang.Boolean))
 
     val topics = Array("sleuth")
+    
+    
     val sleuthWithHeader = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams)).map(_.value())
 
+    
     val json = sleuthWithHeader.map(x => x.substring(x.indexOf("{\"host\":")))
-    
-//    json.print()
-    
-//    val parsedJSON = json.map { x => JSON.parseFull(x) }
-//    
-//    val parsedSpans = parsedJSON.flatMap { x => x.get.asInstanceOf[Map[String,Any]].get("spans").get.asInstanceOf[List[Map[String,Any]]] }
-//    .asInstanceOf[List[Map[String, Any]]]
+//    json.print(1000)
     
     
     val spansStream = json.map(x =>
@@ -59,19 +57,61 @@ object KafkaReadZipkinScala {
 
         
       })
-    
-//    val spans = parsedSpans.map(x => Span.convertToSpan(x))
-    val spanStream = spansStream.flatMap { x => x.getSpans.asScala }
-      
-    val  spanTupleStream = spanStream.map { x => (Span.idToHex(x.getTraceId), x) }.groupByKeyAndWindow(Seconds(60))
-    
-    spanTupleStream.print()
 
-//    
-//    val singleSpans = spans.flatMap { x => x.getSpans.asScala }
-//    
-//    spans.print()
+      //Stream that maps the each Spans object as a Tuple of ServiceName and a List of its associated Spans
+      val serviceStream = spansStream.map(x=> (x.getHost.getServiceName, x.getSpans.asScala)).groupByKey()
+//      serviceStream.print(25)
+
+      
+     //Stream of all Spans that come from Kafka
+     val spanStream = spansStream.flatMap { x => x.getSpans.asScala }
+//     spanStream.print(100);
     
+    val spanTagStream = spanStream.map( x =>  x.tags().asScala.filter(x => x._1.equals("customTag")))
+//    spanTagStream.print(1000)
+    
+    //Stream of Tuples of all Spans and the services there Spans were associated with
+     val spanServiceNameStream = spansStream.flatMap( x => x.getSpans.asScala.map(y => (x.getHost.getServiceName, y.getName()))).groupByKey()
+//     spanServiceNameStream.print(20)
+    
+     //stream to count the number of Spans each Spans-Object has associated with
+     val spansCountStream = spansStream.map { x => (x.getHost.getServiceName, x.getSpans.size()) }
+//     spansCountStream.print(100)
+
+    //Stream of Span-Names and an Iterator of all the Spans with the same name
+     val spanNameStream = spanStream.map(x => (x.getName, x)).groupByKey()
+//     spanNameStream.print(25)
+//     spanNameStream.count().print()
+     
+     val spanNameDurationStream = spanStream.map(x => (x.getName, x.getAccumulatedMicros)).groupByKey()
+//     spanNameDurationStream.print(25)
+
+     
+     //Stream with (#,min,max,avg) for Duration of Spans groupedBy their name
+     val spanNameDurationStatisticsStream = spanNameDurationStream.map(x => (x._1, (x._2.size, x._2.min, x._2.max, x._2.reduce((a,b) => (a+b)/2))))
+     spanNameDurationStatisticsStream.print(50)
+         
+         
+     //groups the stream of span into buckets by TraceId
+     val  spanTraceStream = spanStream.map { x => (Span.idToHex(x.getTraceId), x) }.groupByKeyAndWindow(Seconds(60))
+//     spanTraceStream.print(50) 
+//     spanTraceStream.count().print()
+        
+     
+     // Stream that counts the Spans associated to each traceId and returns a Tuple TraceId/Count
+     val  spanTraceCountStream = spanTraceStream.map(x=> (x._1, x._2.size))
+//     spanTraceCountStream.print(100)
+     
+     
+    //Stream of Tuples of TraceIds/Span for all TraceIds from spanTraceStream with the corresponding rootSpan(with max AccumulatedMicros grouped - parent always null in tested data)
+     val spanTraceStreamMaxDurationSpan = spanTraceStream.map(x => (x._1, x._2.reduce((a, b) => if(a.getAccumulatedMicros>b.getAccumulatedMicros) a else b)))
+//     spanTraceStreamMaxDurationSpan.print(50)
+     
+     
+     //Stream that shows the associated log-events of the Span with the longest duration of a certain Trace
+     val spanTraceStreamMaxDurationSpanLogs = spanTraceStreamMaxDurationSpan.map(x => (x._1, x._2.logs().asScala.map { x => x.getEvent }))
+//     spanTraceStreamMaxDurationSpanLogs.print(50)
+
 
 
     Logger.getRootLogger.setLevel(Level.WARN)
