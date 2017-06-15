@@ -28,20 +28,10 @@
 			<artifactId>spark-streaming-kafka-0-10_2.11 </artifactId>
 			<version>2.1.1</version>
 		</dependency>
-		<!-- <dependency> -->
-		<!-- <groupId>io.zipkin.java</groupId> -->
-		<!-- <artifactId>zipkin</artifactId> -->
-		<!-- <version>1.26.0</version> -->
-		<!-- </dependency> -->
-		<!-- <dependency> -->
-		<!-- <groupId>org.codehaus.jackson</groupId> -->
-		<!-- <artifactId>jackson-mapper-asl</artifactId> -->
-		<!-- <version>1.9.13</version> -->
-		<!-- </dependency> -->
+
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-sleuth-stream</artifactId>
-			<version>1.0.9.RELEASE</version>
 			<exclusions>
 				<exclusion>
 					<groupId>org.slf4j</groupId>
@@ -50,14 +40,27 @@
 			</exclusions>
 		</dependency>
 
+
+
 		<dependency>
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-sleuth-core</artifactId>
-			<version>1.0.9.RELEASE</version>
 		</dependency>
 
 
 	</dependencies>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>Dalston.SR1</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 	<build>
 		<plugins>
 			<plugin>
