@@ -16,29 +16,54 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import scala.util.parsing.json.JSON
 import org.springframework.cloud.sleuth.Span
 import org.springframework.cloud.sleuth.stream.Spans
+import org.springframework.cloud.sleuth.stream.Host
+import scala.collection.mutable.ArrayBuffer
+import org.apache.kafka.clients.producer.KafkaProducer
+import java.util.HashMap
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.apache.kafka.clients.producer.ProducerRecord
 
 object KafkaReadZipkinScala {
+  //General
+  val whitelistedStatusCodes = Array("200", "201")
+  
+  //Logger
+  val rootLoggerLevel = Level.WARN
+  
+  //Kafka
+  val kafkaServers = "localhost:9092"
+  val sleuthInputTopic = "sleuth"
+  val errorOutputTopic = "error"
+  val kafkaAutoOffsetReset = "latest" //use "earliest" to read as much from queue as possible or "latest" to only get new values
+  
+  //Spark
+  val sparkAppName = "KafkaWordCountScala"
+  val sparkMaster = "local[4]"
+  val sparkLocalDir = "C:/tmp"
+  val batchInterval = 5
+  val checkpoint = "checkpoint"
+  
   def main(args: Array[String]) {
-    Logger.getRootLogger.setLevel(Level.WARN)
+    Logger.getRootLogger.setLevel(rootLoggerLevel)
 
-    val sparkConf = new SparkConf().setAppName("KafkaWordCountScala").setMaster("local[4]").set("spark.local.dir", "C:/tmp")
+    val sparkConf = new SparkConf().setAppName(sparkAppName).setMaster(sparkMaster).set("spark.local.dir", sparkLocalDir)
 
     sparkConf.registerKryoClasses(Array(classOf[Span]))
     sparkConf.registerKryoClasses(Array(classOf[Spans]))
     sparkConf.registerKryoClasses(Array(classOf[java.util.Map[String, String]]))
     
-    val ssc = new StreamingContext(sparkConf, Seconds(5))
-    ssc.checkpoint("checkpoint")
+    val ssc = new StreamingContext(sparkConf, Seconds(batchInterval))
+    ssc.checkpoint(checkpoint)
 
     val kafkaParams = Map[String, Object](
-      "bootstrap.servers" -> "localhost:9092",
+      "bootstrap.servers" -> kafkaServers,
       "key.deserializer" -> classOf[StringDeserializer],
       "value.deserializer" -> classOf[StringDeserializer],
       "group.id" -> "zipkinreader",
-      "auto.offset.reset" -> "earliest",
+      "auto.offset.reset" -> kafkaAutoOffsetReset,
       "enable.auto.commit" -> (false: java.lang.Boolean))
 
-    val topics = Array("sleuth")
+    val topics = Array(sleuthInputTopic)
     
     
     val sleuthWithHeader = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams)).map(_.value())
@@ -64,11 +89,29 @@ object KafkaReadZipkinScala {
 
       
      //Stream of all Spans that come from Kafka
-     val spanStream = spansStream.flatMap { x => x.getSpans.asScala }
-//     spanStream.print(100);
+     val spanStream = spansStream.flatMap ( x => {
+       var buffer =  ArrayBuffer[(Host, Span)]()
+       x.getSpans.asScala.foreach( y => buffer.append((x.getHost, y)))
+       buffer })
+       
+     
+//     spanStream.count().print(50);
+//     spanStream.count().print();
     
-    val spanTagStream = spanStream.map( x =>  x.tags().asScala.filter(x => x._1.equals("customTag")))
+    val spanTagStream = spanStream.map( x =>  (x._1, x._2, x._2.tags().asScala.map(y => y))) //map required to prevent some weird serialization issue
 //    spanTagStream.print(1000)
+    
+    //returns a map of tags of all spans that have the tag status_code set and which have not the value 200 or 201
+    val spanErrorStream = spanTagStream.filter(x => {
+      val status_code = x._3.get("http.status_code").getOrElse("").asInstanceOf[String]
+      if (status_code.isEmpty() || whitelistedStatusCodes.contains(status_code)) false
+      else true
+       
+    })
+    
+    spanErrorStream.print(100)
+    
+    
     
     //Stream of Tuples of all Spans and the services there Spans were associated with
      val spanServiceNameStream = spansStream.flatMap( x => x.getSpans.asScala.map(y => (x.getHost.getServiceName, y.getName()))).groupByKey()
@@ -79,21 +122,21 @@ object KafkaReadZipkinScala {
 //     spansCountStream.print(100)
 
     //Stream of Span-Names and an Iterator of all the Spans with the same name
-     val spanNameStream = spanStream.map(x => (x.getName, x)).groupByKey()
+     val spanNameStream = spanStream.map(x => (x._2.getName, x)).groupByKey()
 //     spanNameStream.print(25)
 //     spanNameStream.count().print()
      
-     val spanNameDurationStream = spanStream.map(x => (x.getName, x.getAccumulatedMicros)).groupByKey()
+     val spanNameDurationStream = spanStream.map(x => (x._2.getName, x._2.getAccumulatedMicros)).groupByKey()
 //     spanNameDurationStream.print(25)
 
      
      //Stream with (#,min,max,avg) for Duration of Spans groupedBy their name
      val spanNameDurationStatisticsStream = spanNameDurationStream.map(x => (x._1, (x._2.size, x._2.min, x._2.max, x._2.reduce((a,b) => (a+b)/2))))
-     spanNameDurationStatisticsStream.print(50)
+//     spanNameDurationStatisticsStream.print(50)
          
          
      //groups the stream of span into buckets by TraceId
-     val  spanTraceStream = spanStream.map { x => (Span.idToHex(x.getTraceId), x) }.groupByKeyAndWindow(Seconds(60))
+     val  spanTraceStream = spanStream.map { x => (Span.idToHex(x._2.getTraceId), x._2) }.groupByKeyAndWindow(Seconds(60))
 //     spanTraceStream.print(50) 
 //     spanTraceStream.count().print()
         
@@ -112,9 +155,47 @@ object KafkaReadZipkinScala {
      val spanTraceStreamMaxDurationSpanLogs = spanTraceStreamMaxDurationSpan.map(x => (x._1, x._2.logs().asScala.map { x => x.getEvent }))
 //     spanTraceStreamMaxDurationSpanLogs.print(50)
 
+     
+    
+     
+    spanErrorStream.foreachRDD(rdd =>
+      rdd.foreachPartition(
+          partitionOfRecords =>
+            {
+                val props = new HashMap[String, Object]()
+                props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
+                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                  "org.apache.kafka.common.serialization.StringSerializer")
+                props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                  "org.apache.kafka.common.serialization.StringSerializer")
+                val producer = new KafkaProducer[String,String](props)
 
+                partitionOfRecords.foreach
+                {
+                     x=>{
+                        
+                        
+                        val host =   x._1
+                        val span =   x._2
+                        val tagMap = x._3
+                        
+                        val hostString = host.getServiceName + "@" + host.getAddress + ":" + host.getPort
+                        val spanName= span.getName
+                        val traceId = span.getTraceId
+                        val httpStatusCode = tagMap.getOrElse("http.status_code", "").asInstanceOf[String];
+                        val errorMessage =tagMap.getOrElse("error", "")
+                        val errorJSON = "{\"host\":\""+ hostString + "\", \"spanName\":\""+spanName+"\", \"traceId\":\"" +traceId+"\", \"status_code\":\"" + httpStatusCode+ "\", \"errorMessage\":\""+errorMessage +"\"}"
 
-    Logger.getRootLogger.setLevel(Level.WARN)
+                        
+                        val message=new ProducerRecord[String, String](errorOutputTopic,null,errorJSON)
+                        producer.send(message)
+                        println(errorJSON)
+                    }
+                }
+          })
+) 
+
+    Logger.getRootLogger.setLevel(rootLoggerLevel)
     ssc.start()
     ssc.awaitTermination()
   }
