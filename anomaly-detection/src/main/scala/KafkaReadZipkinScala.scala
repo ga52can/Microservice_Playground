@@ -34,14 +34,14 @@ object KafkaReadZipkinScala {
   val kafkaServers = "localhost:9092"
   val sleuthInputTopic = "sleuth"
   val errorOutputTopic = "error"
-  val kafkaAutoOffsetReset = "latest" //use "earliest" to read as much from queue as possible or "latest" to only get new values
+  val kafkaAutoOffsetReset = "earliest" //use "earliest" to read as much from queue as possible or "latest" to only get new values
   
   //Spark
-  val sparkAppName = "KafkaWordCountScala"
+  val sparkAppName = "KafkaReadZipkin"
   val sparkMaster = "local[4]"
   val sparkLocalDir = "C:/tmp"
   val batchInterval = 5
-  val checkpoint = "checkpoint"
+  val checkpoint = "checkpoint-read"
   
   def main(args: Array[String]) {
     Logger.getRootLogger.setLevel(rootLoggerLevel)
@@ -109,7 +109,7 @@ object KafkaReadZipkinScala {
        
     })
     
-    spanErrorStream.print(100)
+//    spanErrorStream.print(100)
     
     
     
@@ -132,7 +132,7 @@ object KafkaReadZipkinScala {
      
      //Stream with (#,min,max,avg) for Duration of Spans groupedBy their name
      val spanNameDurationStatisticsStream = spanNameDurationStream.map(x => (x._1, (x._2.size, x._2.min, x._2.max, x._2.reduce((a,b) => (a+b)/2))))
-//     spanNameDurationStatisticsStream.print(50)
+     spanNameDurationStatisticsStream.print(50)
          
          
      //groups the stream of span into buckets by TraceId

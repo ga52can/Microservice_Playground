@@ -34,6 +34,12 @@ public class AccountServiceController {
     public ModelAndView book(@PathVariable(value="service") String serviceName,
                              @PathVariable(value = "route_id") int routeId,
                              HttpServletResponse response) {
+//      Activate to make the service call thrwo a nullpointer exception    	
+//    	String nullObject = null;
+//    	nullObject.toString();
+    	
+//    	Activate to pause the Action for x Milliseconds - e.g. to provoke a timeout. (timeout duration set in zuul config)
+//    	Thread.sleep(40000);
         ModelAndView model = new ModelAndView("book_result");
         String deutscheBahnService = "deutsche-bahn";
         String driveNowService = "drive-now";

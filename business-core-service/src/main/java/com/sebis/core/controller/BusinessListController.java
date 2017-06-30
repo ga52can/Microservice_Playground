@@ -34,7 +34,14 @@ public class BusinessListController {
 
     @RequestMapping(value = { "/businesses/list" }, method = RequestMethod.GET)
     @ResponseBody
-    public ModelAndView getServices() {
+    public ModelAndView getServices() throws InterruptedException {
+    	
+//      Activate to make the service call thrwo a nullpointer exception    	
+//    	String nullObject = null;
+//    	nullObject.toString();
+    	
+//    	Activate to pause the Action for x Milliseconds - e.g. to provoke a timeout. (timeout duration set in zuul config)
+//    	Thread.sleep(10000);
     	
     	tracer.addTag("customTag", "BusinessListController/getServices");
         ModelAndView model = new ModelAndView();
