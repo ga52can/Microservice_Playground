@@ -156,7 +156,6 @@ object KafkaReadZipkinScala {
 //     spanTraceStreamMaxDurationSpanLogs.print(50)
 
      
-    
      
     spanErrorStream.foreachRDD(rdd =>
       rdd.foreachPartition(

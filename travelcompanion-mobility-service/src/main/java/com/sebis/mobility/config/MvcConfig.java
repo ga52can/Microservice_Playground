@@ -1,13 +1,16 @@
 package com.sebis.mobility.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.core.env.Environment;
 
 /**
@@ -43,6 +46,21 @@ public class MvcConfig extends WebMvcConfigurerAdapter {
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
+    }
+    
+    @Autowired
+    Tracer tracer;
+    
+	@Autowired BeanFactory beanFactory;
+
+	@Bean
+	public CustomTraceHandlerInterceptor customTraceHandlerInterceptor(BeanFactory beanFactory) {
+		return new CustomTraceHandlerInterceptor(beanFactory,tracer);
+	}
+
+    @Bean
+    CustomFilter customFilter(){
+    	return new CustomFilter(tracer);
     }
 
 }

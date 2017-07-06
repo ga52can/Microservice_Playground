@@ -1,11 +1,24 @@
 package com.sebis.mobility.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.cloud.sleuth.SpanReporter;
+import org.springframework.cloud.sleuth.TraceKeys;
+import org.springframework.cloud.sleuth.Tracer;
+import org.springframework.cloud.sleuth.instrument.web.HttpSpanExtractor;
+import org.springframework.cloud.sleuth.instrument.web.HttpTraceKeysInjector;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.context.AbstractSecurityWebApplicationInitializer;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
@@ -17,6 +30,16 @@ public class MvcConfig extends WebMvcConfigurerAdapter {
 
     @Autowired
     Environment env;
+    
+    @Autowired
+    Tracer tracer;
+    
+	@Autowired BeanFactory beanFactory;
+
+	@Bean
+	public CustomTraceHandlerInterceptor customTraceHandlerInterceptor(BeanFactory beanFactory) {
+		return new CustomTraceHandlerInterceptor(beanFactory,tracer);
+	}
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
@@ -34,7 +57,21 @@ public class MvcConfig extends WebMvcConfigurerAdapter {
     }
 
     @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
     public ObjectMapper objectMapper() {
         return new CustomObjectMapper();
     }
+    
+//    @Bean
+//    CustomTraceFilter customTraceFilter(Tracer tracer, TraceKeys traceKeys, SpanReporter spanReporter,
+//			HttpSpanExtractor spanExtractor, HttpTraceKeysInjector httpTraceKeysInjector) {
+//    	return new CustomTraceFilter(tracer, traceKeys, spanReporter, spanExtractor, httpTraceKeysInjector);
+//    }
+    
+    @Bean
+    CustomFilter customFilter(){
+    	return new CustomFilter(tracer);
+    }
+    
+
 }

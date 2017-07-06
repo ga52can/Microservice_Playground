@@ -41,6 +41,8 @@ object KafkaKMeans {
   val whitelistedStatusCodes = Array("200", "201")
   val spanNameFilter ="http:/business-core-service/businesses/list"
   
+   val spanNameFilterSet = Set("http:/business-core-service/businesses/list", "http:/accounting-core-service/drive-now/1/book")
+  
   //kMeans
   val k = 1
   var flag = 0
@@ -126,6 +128,12 @@ object KafkaKMeans {
        
        
      val filteredSpanStream = spanStream.filter { x => x._2.getName.equals(spanNameFilter) }  
+    
+    
+    
+    
+    
+    
        
      val spanDurationVectorStream = filteredSpanStream.map(x => Vectors.dense(x._2.getAccumulatedMicros))
      val spanLabledDurationVectorStream = spanStream.map(x => (x._2.getSpanId,Vectors.dense(x._2.getAccumulatedMicros)))
@@ -137,6 +145,7 @@ object KafkaKMeans {
       if(rdd.count()==0){
         flag = 1
       }
+      println(rdd.count())
       vectorRdd =vectorRdd.union(rdd)
      
      }

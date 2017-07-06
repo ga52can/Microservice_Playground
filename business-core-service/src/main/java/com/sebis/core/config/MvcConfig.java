@@ -1,6 +1,12 @@
 package com.sebis.core.config;
 
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+
+
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.sleuth.Tracer;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 
@@ -16,4 +22,18 @@ public class MvcConfig extends WebMvcConfigurerAdapter {
         registry.addViewController("/businesses/list").setViewName("service");
     }
 
+    @Autowired
+    Tracer tracer;
+    
+	@Autowired BeanFactory beanFactory;
+
+	@Bean
+	public CustomTraceHandlerInterceptor customTraceHandlerInterceptor(BeanFactory beanFactory) {
+		return new CustomTraceHandlerInterceptor(beanFactory,tracer);
+	}
+
+    @Bean
+    CustomFilter customFilter(){
+    	return new CustomFilter(tracer);
+    }
 }
