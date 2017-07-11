@@ -14,6 +14,7 @@ import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 
 public class CustomTraceHandlerInterceptor extends HandlerInterceptorAdapter {
@@ -30,6 +31,8 @@ public class CustomTraceHandlerInterceptor extends HandlerInterceptorAdapter {
 	@Override
 	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
 			throws Exception {
+		
+		tracer.addTag("interceptorTag", "preHandle");
 			
 		System.out.println("Custom Trace handler triggert");
 //		// "/{service}/{route_id}/book"
@@ -102,5 +105,14 @@ public class CustomTraceHandlerInterceptor extends HandlerInterceptorAdapter {
 //		}
 //		getTracer().addTag(getTraceKeys().getMvc().getControllerClass(), className);
 //	}
+	
+	@Override
+	public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
+			ModelAndView modelAndView) throws Exception {
+		
+		tracer.addTag("interceptorTag", "postHandle");
+		
+		super.postHandle(request, response, handler, modelAndView);
+	}
 
 }

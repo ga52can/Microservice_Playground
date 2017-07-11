@@ -25,8 +25,8 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>com.sebis</groupId>
-			<artifactId>sleuthextensions</artifactId>
+			<groupId>de.sebis</groupId>
+			<artifactId>sleuthextension</artifactId>
 			<version>0.0.1-SNAPSHOT</version>
 		</dependency>
 		<dependency>

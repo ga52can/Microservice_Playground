@@ -30,41 +30,14 @@ public class CustomFilter extends GenericFilterBean {
 		this.tracer = tracer;
 	}
 	
-	private int pid() {
-        String name = ManagementFactory.getRuntimeMXBean().getName();
-        name = name.substring(0, name.indexOf("@"));
-        return Integer.parseInt(name);
-}
+
 	
 	@Override
 	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
 			throws IOException, ServletException {
 		System.out.println("CustomFilter triggert");
 		
-		JStatData data = JStatData.connect(pid());
-    	for(JStatData.Counter<?> c: data.getAllCounters().values()) {
-    		if(c.getName().equals("sun.gc.collector.0.time")||c.getName().equals("sun.gc.collector.1.time")||c.getName().equals("sun.gc.collector.0.invocations")||c.getName().equals("sun.gc.collector.1.invocations")){
-    			String message = c.getName()+";"+c.getUnits()+";"+c.getVariability()+";"+c.getValue();
-        		if (c instanceof StringCounter) {
-        			String val = (String) c.getValue();
-        			message = message + val;
-        		}
-        		tracer.addTag(c.getName(),""+ c.getValue());
-        		System.out.println(message);
-    		}
-    		
-    		
-}
-		try {
-			tracer.addTag("cpu.system.utilization", Double.toString(getSystemCpuLoad()));
-			tracer.addTag("cpu.process.utilization", Double.toString(getProcessCpuLoad()));
-			System.out.println("Process CPU Utilization: "+getProcessCpuLoad());
-			System.out.println("System CPU Utilization: "+getSystemCpuLoad());
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-//			e.printStackTrace();
-			System.out.println("Issue while trying to access cpu utilization information");
-		}
+		tracer.addTag("filterTag", "set");
 		
 		for(String name : request.getParameterMap().keySet()){
 			tracer.addTag("filter.param."+name, request.getParameter(name));
@@ -125,38 +98,4 @@ public class CustomFilter extends GenericFilterBean {
 
 	}
 	
-	public static double getProcessCpuLoad() throws Exception {
-
-	    MBeanServer mbs    = ManagementFactory.getPlatformMBeanServer();
-	    ObjectName name    = ObjectName.getInstance("java.lang:type=OperatingSystem");
-	    AttributeList list = mbs.getAttributes(name, new String[]{ "ProcessCpuLoad" });
-
-	    if (list.isEmpty())     return Double.NaN;
-
-	    Attribute att = (Attribute)list.get(0);
-	    Double value  = (Double)att.getValue();
-
-	    // usually takes a couple of seconds before we get real values
-	    if (value == -1.0)      return Double.NaN;
-	    // returns a percentage value with 1 decimal point precision
-	    return ((int)(value * 1000) / 10.0);
-	}
-	
-	public static double getSystemCpuLoad() throws Exception {
-
-	    MBeanServer mbs    = ManagementFactory.getPlatformMBeanServer();
-	    ObjectName name    = ObjectName.getInstance("java.lang:type=OperatingSystem");
-	    AttributeList list = mbs.getAttributes(name, new String[]{ "SystemCpuLoad" });
-
-	    if (list.isEmpty())     return Double.NaN;
-
-	    Attribute att = (Attribute)list.get(0);
-	    Double value  = (Double)att.getValue();
-
-	    // usually takes a couple of seconds before we get real values
-	    if (value == -1.0)      return Double.NaN;
-	    // returns a percentage value with 1 decimal point precision
-	    return ((int)(value * 1000) / 10.0);
-	}
-
 }

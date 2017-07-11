@@ -3,10 +3,12 @@ package com.sebis.mobility.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import de.sebis.sleuthextension.CustomFilter;
+import de.sebis.sleuthextension.CustomSpanAdjuster;
 import de.sebis.sleuthextension.CustomTraceHandlerInterceptor;
 
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.sleuth.SpanAdjuster;
 import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,8 +23,35 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter
 @Configuration
 public class MvcConfig extends WebMvcConfigurerAdapter {
 
-    @Autowired
-    Environment env;
+	Tracer tracer;
+
+	@Autowired
+	BeanFactory beanFactory;
+
+	@Autowired
+	Environment env;
+
+	Tracer tracer() {
+		if (this.tracer == null) {
+			this.tracer = this.beanFactory.getBean(Tracer.class);
+		}
+		return this.tracer;
+	}
+
+	@Bean
+	public CustomTraceHandlerInterceptor customTraceHandlerInterceptor(BeanFactory beanFactory) {
+		return new CustomTraceHandlerInterceptor(beanFactory, tracer());
+	}
+
+	@Bean
+	public SpanAdjuster customSpanAdjuster() {
+		return new CustomSpanAdjuster();
+	}
+
+	@Bean
+	CustomFilter customFilter() {
+		return new CustomFilter(tracer());
+	}
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
@@ -44,18 +73,4 @@ public class MvcConfig extends WebMvcConfigurerAdapter {
         return new CustomObjectMapper();
     }
     
-    @Autowired
-    Tracer tracer;
-    
-	@Autowired BeanFactory beanFactory;
-
-	@Bean
-	public CustomTraceHandlerInterceptor customTraceHandlerInterceptor(BeanFactory beanFactory) {
-		return new CustomTraceHandlerInterceptor(beanFactory,tracer);
-	}
-
-    @Bean
-    CustomFilter customFilter(){
-    	return new CustomFilter(tracer);
-    }
 }
