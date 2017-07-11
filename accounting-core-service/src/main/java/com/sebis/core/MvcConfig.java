@@ -12,6 +12,9 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
+import de.sebis.sleuthextension.CustomFilter;
+import de.sebis.sleuthextension.CustomTraceHandlerInterceptor;
+
 
 /**
  * Created by sohaib on 31/03/17.

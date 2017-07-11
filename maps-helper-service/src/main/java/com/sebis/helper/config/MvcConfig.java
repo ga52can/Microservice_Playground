@@ -9,6 +9,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
+import de.sebis.sleuthextension.CustomFilter;
+import de.sebis.sleuthextension.CustomTraceHandlerInterceptor;
+
 
 
 /**

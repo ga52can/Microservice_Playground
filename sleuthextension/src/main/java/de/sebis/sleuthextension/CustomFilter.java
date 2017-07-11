@@ -1,7 +1,10 @@
-package com.sebis.mobility.config;
+package de.sebis.sleuthextension;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.util.Enumeration;
+import java.util.Map;
+
 import javax.management.Attribute;
 import javax.management.AttributeList;
 import javax.management.MBeanServer;
@@ -11,10 +14,13 @@ import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import org.gridkit.lab.jvm.perfdata.JStatData;
 import org.gridkit.lab.jvm.perfdata.JStatData.StringCounter;
 import org.springframework.cloud.sleuth.Tracer;
 import org.springframework.web.filter.GenericFilterBean;
+import org.springframework.web.servlet.HandlerMapping;
 
 public class CustomFilter extends GenericFilterBean {
 

@@ -2,6 +2,9 @@ package com.sebis.mobility.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import de.sebis.sleuthextension.CustomFilter;
+import de.sebis.sleuthextension.CustomTraceHandlerInterceptor;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.sleuth.Tracer;

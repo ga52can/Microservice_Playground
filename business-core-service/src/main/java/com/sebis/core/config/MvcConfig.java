@@ -2,6 +2,8 @@ package com.sebis.core.config;
 
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
+import de.sebis.sleuthextension.CustomFilter;
+import de.sebis.sleuthextension.CustomTraceHandlerInterceptor;
 
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
