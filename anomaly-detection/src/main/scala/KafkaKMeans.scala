@@ -39,7 +39,8 @@ import org.apache.spark.streaming.kafka010.KafkaRDD
 object KafkaKMeans {
   //General
   val whitelistedStatusCodes = Array("200", "201")
-  val spanNameFilter ="http:/business-core-service/businesses/list"
+  val spanNameFilter ="http:/distance"
+//  val spanNameFilter ="http:/login"
   
    val spanNameFilterSet = Set("http:/business-core-service/businesses/list", "http:/accounting-core-service/drive-now/1/book")
   
@@ -64,11 +65,12 @@ object KafkaKMeans {
   val checkpoint = "checkpoint"
   
   //global fields
-  
   def main(args: Array[String]) {
-    Logger.getRootLogger.setLevel(rootLoggerLevel)
+    
+    val sparkConf = new SparkConf().setAppName(sparkAppName).setMaster(sparkMaster)
+    .set("spark.local.dir", sparkLocalDir)
+    .set("spark.driver.allowMultipleContexts", "true")
 
-    val sparkConf = new SparkConf().setAppName(sparkAppName).setMaster(sparkMaster).set("spark.local.dir", sparkLocalDir).set("spark.driver.allowMultipleContexts", "true")
 
     sparkConf.registerKryoClasses(Array(classOf[Span]))
     sparkConf.registerKryoClasses(Array(classOf[Spans]))
@@ -76,6 +78,31 @@ object KafkaKMeans {
     
     val ssc = new StreamingContext(sparkConf, Seconds(batchInterval))
     ssc.checkpoint(checkpoint)
+    //val predictor = (model, ninetynine, median, avg, max)
+    val result = trainKMeans(ssc);
+    
+    println("----Result----")
+    for( i <- 0 until result._1.clusterCenters.length){
+      println("Centroid: "+ result._1.clusterCenters(i))
+    }
+    
+    println("99 percentile: "+ result._2)
+    println("Median: "+ result._3)
+    println("Average: "+ result._4)
+    println("Max: "+ result._5)
+    
+    ssc.stop(true,false)
+    
+    println("SSC stopped")
+    
+    
+    
+  }
+  
+  def trainKMeans(ssc: StreamingContext): (KMeansModel, Double, Double, Double, Double)={
+    Logger.getRootLogger.setLevel(rootLoggerLevel)
+
+    
     var buffer = new ArrayBuffer[Vector]
     buffer.append(Vectors.dense(1000.0))
     var vectorRdd = ssc.sparkContext.parallelize(buffer)
@@ -144,6 +171,7 @@ object KafkaKMeans {
     spanDurationVectorStream.foreachRDD { rdd => 
       if(rdd.count()==0){
         flag = 1
+//        println("set flag to 1")
       }
       println(rdd.count())
       vectorRdd =vectorRdd.union(rdd)
@@ -161,34 +189,119 @@ object KafkaKMeans {
 //    ssc.awaitTermination()
     
     while (flag == 0) {
+      println("flag: "+flag)
+      Thread.sleep(1000)
     }
      val sc = ssc.sparkContext
+     println("left loop")
+//     println(vectorRdd.count())
+     vectorRdd.cache()
+//     val normalizedData = normalizationOfDataBuffer(vectorRdd, sc)
      
-     println(vectorRdd.count())
+     val dim = vectorRdd.first().toArray.size
      
-     val normalizedData = normalizationOfDataBuffer(vectorRdd, sc)
-     val model = trainModel(normalizedData)
+     val zeroVector = Vectors.dense(Array.fill(dim)(0d))
      
-     val centroid = model.clusterCenters(0).toString // save centroid to file
-     println(centroid)
-     
-     val distances = normalizedData.map(d => distToCentroid(d, model))
-     
-     val max = distances.max()
-     val median = rddMedian(distances)
-     val avg = distances.reduce(_+_)/distances.count()
-     
-     println("Max Distance: "+max)
-     println("Median Distance: "+median)
-     println("Avg Distance: "+avg)
-//     
-//     ssc.stop(true, true)
     
-    ssc.awaitTermination()
+     val distanceToZeroVector = vectorRdd.map(d => (distToCentroid(d, zeroVector), d))
+     
+     implicit val sortAscending = new Ordering[(Double,Vector)] {
+      override def compare(a: (Double,Vector), b: (Double,Vector)) = {
+          //a.toString.compare(b.toString)
+            if(a._1 < b._1) {
+               -1
+            }else{
+               +1
+            }
+          }
+      }
+     
+//     val array95 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.95).toInt)(sortAscending).map(f=> f._2)
+//     val array99 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.99).toInt)(sortAscending).map(f=> f._2)
+     val array999 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.999).toInt)(sortAscending).map(f=> f._2)
+     
+     
+//     val rdd95 = sc.parallelize(array95)
+//     val rdd99 = sc.parallelize(array99)
+     val rdd999 = sc.parallelize(array999)
+     
+//     val model = trainModel(vectorRdd)
+//     val model95 = trainModel(rdd95)
+//     val model99 = trainModel(rdd99)
+     val model999 = trainModel(rdd999)
+     
+
+     
+//     val distances = normalizedData.map(d => distToCentroid(d, model))
+     
+
+     
+//     printStatistics(vectorRdd, model, "All data points")
+     printStatistics(rdd999, model999, " 99.9 percentile")
+//     printStatistics(rdd99, model99, " 99 percentile")
+//     printStatistics(rdd95, model95, " 95 percentile")
+     
+
+     
+     vectorRdd.unpersist(true)
+   
+     
+     
+//     val predictor = (model, ninetynine, median, avg, max)
+     
+     predictor(rdd999, model999)
+     
     
   }
   
 
+  def printStatistics(vectorRdd: RDD[Vector], model: KMeansModel, modelDescription: String) = {
+    
+    
+     //       val centroid = model.clusterCenters(model.predict(datum)) // if more than 1 center
+     val centroid = model.clusterCenters(0)  //if only 1 center
+     
+     println("----Model: "+modelDescription+"----")
+     
+     println("Centroid: "+centroid)
+    
+    val distances = vectorRdd.map(d => distToCentroid(d, centroid))
+
+     
+     val max = Math.sqrt(distances.max())
+     val median = Math.sqrt(rddMedian(distances))
+     val avg = Math.sqrt(distances.reduce(_+_)/distances.count())
+     val ninetyfive = Math.sqrt(distances.top(Math.ceil(distances.count()*0.05).toInt).last)
+     val ninetynine = Math.sqrt(distances.top(Math.ceil(distances.count()*0.01).toInt).last)
+     
+     println("Max Distance: "+max)
+     println("Median Distance: "+median)
+     println("Avg Distance: "+avg)
+     println("95% percentile: "+ninetyfive)
+     println("99% percentile: "+ninetynine)
+  }
+  
+    def predictor(vectorRdd: RDD[Vector], model: KMeansModel) = {
+    
+    
+     //       val centroid = model.clusterCenters(model.predict(datum)) // if more than 1 center
+    val centroid = model.clusterCenters(0)  //if only 1 center
+
+    
+    val distances = vectorRdd.map(d => distToCentroid(d, centroid))
+
+     
+     val max = Math.sqrt(distances.max())
+     val median = Math.sqrt(rddMedian(distances))
+     val avg = Math.sqrt(distances.reduce(_+_)/distances.count())
+     val ninetyfive = Math.sqrt(distances.top(Math.ceil(distances.count()*0.05).toInt).last)
+     val ninetynine = Math.sqrt(distances.top(Math.ceil(distances.count()*0.01).toInt).last)
+
+     
+     val predictor = (model, ninetynine, median, avg, max)
+     predictor
+  }
+  
   
     /**
    * Normalization function. 
@@ -207,9 +320,9 @@ object KafkaKMeans {
       (sumSq, sum) => math.sqrt(n * sumSq - sum * sum) / n
     }
     
-    print(stdevs)
+    stdevs.foreach(f=>println("stdevs: "+f))
     val means = sums.map(_ / n)
-    print(means)
+    means.foreach(f => println("means: "+f))
     def normalize(v: Vector): Vector = {
       val normed = (v.toArray, means, stdevs).zipped.map { 
         case (value, mean, 0) => (value - mean) / 1 // if stdev is 0
@@ -233,9 +346,8 @@ object KafkaKMeans {
     model
 }
   
-    def distToCentroid(datum: Vector, model: KMeansModel) : Double = {
-//    val centroid = model.clusterCenters(model.predict(datum)) // if more than 1 center
-    val centroid = model.clusterCenters(0)  //if only 1 center
+    def distToCentroid(datum: Vector, centroid: Vector) : Double = {
+//  
     Vectors.sqdist(datum, centroid)
 }
     

@@ -35,13 +35,13 @@ public class CustomFilter extends GenericFilterBean {
 	@Override
 	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
 			throws IOException, ServletException {
-		System.out.println("CustomFilter triggert");
+//		System.out.println("CustomFilter triggert");
 		
 		tracer.addTag("filterTag", "set");
 		
 		for(String name : request.getParameterMap().keySet()){
 			tracer.addTag("filter.param."+name, request.getParameter(name));
-			System.out.println("filter.param."+name+": "+request.getParameter(name));
+//			System.out.println("filter.param."+name+": "+request.getParameter(name));
 		}
 //		System.out.println("Request - Local Address:" + request.getLocalAddr());
 //		System.out.println("Request - LocalName:" + request.getLocalName());
@@ -60,7 +60,7 @@ public class CustomFilter extends GenericFilterBean {
 //		}
 		
 		if (request instanceof HttpServletRequest) {
-			System.out.println("It is a http request");
+//			System.out.println("It is a http request");
 			HttpServletRequest httpRequest = (HttpServletRequest) request;
 			if(httpRequest.getUserPrincipal() != null){
 //				System.out.println("HttpRequest - UserPrincipal.Name: " + httpRequest.getUserPrincipal().getName());

@@ -34,7 +34,7 @@ public class CustomTraceHandlerInterceptor extends HandlerInterceptorAdapter {
 		
 		tracer.addTag("interceptorTag", "preHandle");
 			
-		System.out.println("Custom Trace handler triggert");
+//		System.out.println("Custom Trace handler triggert");
 //		// "/{service}/{route_id}/book"
 //		String matchingPattern = (String) request
 //		                    .getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
@@ -45,13 +45,13 @@ public class CustomTraceHandlerInterceptor extends HandlerInterceptorAdapter {
 		                    .getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
 
 		for(String key: templateVariables.keySet()){
-			System.out.println("inter.param."+key+": "+templateVariables.get(key));
+//			System.out.println("inter.param."+key+": "+templateVariables.get(key));
 			tracer.addTag("inter.param."+key, templateVariables.get(key));
 		}
 		
 		for(String name : request.getParameterMap().keySet()){
 			tracer.addTag("inter.param."+name, request.getParameter(name));
-			System.out.println("inter.param."+name+": "+request.getParameter(name));
+//			System.out.println("inter.param."+name+": "+request.getParameter(name));
 		}
 		
 		

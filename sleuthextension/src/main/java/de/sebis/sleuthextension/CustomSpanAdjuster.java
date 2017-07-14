@@ -26,20 +26,34 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 			System.out.println("Issue while trying to access cpu utilization information");
 		}
 
-		JStatData data = JStatData.connect(pid());
-		for (JStatData.Counter<?> c : data.getAllCounters().values()) {
-			if (c.getName().equals("sun.gc.collector.0.time") || c.getName().equals("sun.gc.collector.1.time")
-					|| c.getName().equals("sun.gc.collector.0.invocations")
-					|| c.getName().equals("sun.gc.collector.1.invocations")) {
-				String message = c.getName() + ";" + c.getUnits() + ";" + c.getVariability() + ";" + c.getValue();
-				if (c instanceof StringCounter) {
-					String val = (String) c.getValue();
-					message = message + val;
-				}
-				span.tag(c.getName(), "" + c.getValue());
-				System.out.println(message);
-			}
-		}
+//		JStatData data = JStatData.connect(pid());
+//		for (JStatData.Counter<?> c : data.getAllCounters().values()) {
+//			if (c.getName().equals("sun.gc.collector.0.time") || c.getName().equals("sun.gc.collector.1.time")
+//					|| c.getName().equals("sun.gc.collector.0.invocations")
+//					|| c.getName().equals("sun.gc.collector.1.invocations")) {
+//				String message = c.getName() + ";" + c.getUnits() + ";" + c.getVariability() + ";" + c.getValue();
+//				if (c instanceof StringCounter) {
+//					String val = (String) c.getValue();
+//					message = message + val;
+//				}
+//				span.tag(c.getName(), "" + c.getValue());
+//				System.out.println(message);
+//			}
+//		}
+		
+        int mb = 1024*1024;
+		
+		Runtime runtime = Runtime.getRuntime();
+		
+		Long totalMemory = runtime.totalMemory()/ mb;
+		Long freeMemory = runtime.freeMemory()/ mb;
+		Long maxMemory = runtime.maxMemory()/mb;
+		Long usedMemory = totalMemory - freeMemory;
+		
+		span.tag("jvm.usedMemory.mb", usedMemory+"");
+		span.tag("jvm.totalMemory.mb", totalMemory+"");
+		span.tag("jvm.freeMemory.mb", freeMemory+"");
+		span.tag("jvm.maxMemory.mb", maxMemory+"");
 
 		return span;
 	}
@@ -68,6 +82,7 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 		// returns a percentage value with 1 decimal point precision
 		return ((int) (value * 1000) / 10.0);
 	}
+
 
 	public static double getSystemCpuLoad() throws Exception {
 
