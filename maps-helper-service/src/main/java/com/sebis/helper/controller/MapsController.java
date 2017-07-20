@@ -42,6 +42,14 @@ public class MapsController {
                     return new City(id, cityName, latitude, longitude);
                 }
         );
+        
+        try {
+			Thread.sleep(60);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        
         if (cities.size() == 2) {
             return String.format(Locale.US, "{\"result\": %.2f}", cities.get(0).calculateDistance(cities.get(1)));
         } else {

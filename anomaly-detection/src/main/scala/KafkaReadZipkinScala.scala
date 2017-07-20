@@ -188,7 +188,7 @@ object KafkaReadZipkinScala {
                         
                         val message=new ProducerRecord[String, String](errorOutputTopic,null,errorJSON)
                         producer.send(message)
-                        println(errorJSON)
+//                        println(errorJSON)
                     }
                 }
           })
