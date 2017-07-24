@@ -141,7 +141,7 @@ object KafkaSplittedKMeans {
         if (isAnomaly(x, models)) {
           reportAnomaly(x._2, x._1)
         } else {
-          println(x._1 + " no anomaly")
+          println("no anomaly: "+x._1)
         }
       })
 
@@ -168,7 +168,7 @@ object KafkaSplittedKMeans {
   }
 
   def reportAnomaly(id: Long, spanName: String) {
-    println(spanName+": Span " + id + " is an anomaly")
+    println("anomaly: "+spanName+": Span " + id + " is an anomaly")
   }
 
   def trainKMeans(ssc: StreamingContext): Set[(String,(KMeansModel, Double, Double, Double, Double))] = {
@@ -191,7 +191,7 @@ object KafkaSplittedKMeans {
     
     spanNameStream.foreachRDD(rdd=>{
       filterRdd = filterRdd.union(rdd).distinct()
-      filterRdd.foreach(x=> println(x))
+//      filterRdd.foreach(x=> println(x))
     })
 
     val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(httpSpanStream)
@@ -212,7 +212,7 @@ object KafkaSplittedKMeans {
     ssc.start()
 
     while (flag == 0) {
-      println("flag: " + flag)
+//      println("flag: " + flag)
       Thread.sleep(1000)
     }
     val sc = ssc.sparkContext
@@ -279,7 +279,7 @@ object KafkaSplittedKMeans {
     //     val distances = normalizedData.map(d => distToCentroid(d, model))
 
     //     printStatistics(vectorRdd, model, "All data points")
-    printStatistics(rdd999, model999, " 99.9 percentile")
+//    printStatistics(rdd999, model999, " 99.9 percentile")
     //     printStatistics(rdd99, model99, " 99 percentile")
     //     printStatistics(rdd95, model95, " 95 percentile")
 
