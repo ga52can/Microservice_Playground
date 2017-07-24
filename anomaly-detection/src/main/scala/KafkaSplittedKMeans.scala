@@ -86,28 +86,13 @@ object KafkaSplittedKMeans {
     //val predictor = (model, ninetynine, median, avg, max)
     
     val result = trainKMeans(trainingSsc);
-
-    
-
-
-
     
     trainingSsc.stop(false,false)
     println("SSC stopped")
-    //    val predConf = new SparkConf().setAppName("prediction").setMaster(sparkMaster)
-    //      .set("spark.local.dir", sparkLocalDir)
-    //      .set("spark.driver.allowMultipleContexts", "true")
-    //
-    //    predConf.registerKryoClasses(Array(classOf[Span]))
-    //    predConf.registerKryoClasses(Array(classOf[Spans]))
-    //    predConf.registerKryoClasses(Array(classOf[java.util.Map[String, String]]))
-
     
     for(resultLine <- result){
       printResultLine(resultLine)
     }
-    
-    
     
     val predictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
     predictionSsc.checkpoint("pred-checkpoint")
@@ -115,6 +100,10 @@ object KafkaSplittedKMeans {
     val models = result.toMap
     kMeansAnomalyDetection(predictionSsc, models)
 
+  }
+  
+  def filterSpanStreamForHttpRequests(spanStream: DStream[(Host, Span)]): DStream[(Host, Span)]= {
+    spanStream.filter(x => x._2.tags().keySet().contains("http.method")||x._2.getSpanId==x._2.getTraceId)
   }
   
   def printResultLine(resultLine: (String,(KMeansModel, Double, Double, Double, Double)))={
@@ -127,8 +116,6 @@ object KafkaSplittedKMeans {
     val median = Math.sqrt(result._3)
     val avg = Math.sqrt(result._4)
     val max = Math.sqrt(result._5)
-    
-    
 
     println("----Results for "+ spanName +"----")
     for (i <- 0 until model.clusterCenters.length) {
@@ -144,7 +131,9 @@ object KafkaSplittedKMeans {
   def kMeansAnomalyDetection(ssc: StreamingContext, models: Map[String,(KMeansModel, Double, Double, Double, Double)]) = {
     val spanStream = getSpanStreamFromKafka(ssc, "latest", "prediction")
 
-    val labeledSpanDurationVectorStream = getLabeledSpanDurationStreamFromSpanStream(spanStream)
+    val httpSpanStream = filterSpanStreamForHttpRequests(spanStream)
+    
+    val labeledSpanDurationVectorStream = getLabeledSpanDurationStreamFromSpanStream(httpSpanStream)
 
     labeledSpanDurationVectorStream.foreachRDD { rdd =>
 
@@ -192,13 +181,21 @@ object KafkaSplittedKMeans {
     var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
 
     val spanStream = getSpanStreamFromKafka(ssc, "earliest", "training")
-    val spanNameStream = spanStream.map(x=> x._2.getName)
+    
+    val httpSpanStream = filterSpanStreamForHttpRequests(spanStream)
+    
+    val spanNameStream = httpSpanStream.map(x=> x._2.tags().get("http.method")+":"+x._2.getName)
+//    val spanNameStream = spanStream.map(x=>x._2.getName)
+    
+    
     
     spanNameStream.foreachRDD(rdd=>{
       filterRdd = filterRdd.union(rdd).distinct()
+      filterRdd.foreach(x=> println(x))
     })
 
-    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(spanStream)
+    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(httpSpanStream)
+//    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(spanStream)
 
     spanDurationVectorStream.foreachRDD { rdd =>
       if (rdd.count() == 0) {
@@ -210,11 +207,9 @@ object KafkaSplittedKMeans {
 
     }
 
-    //    spanDurationStream.saveAsTextFiles("data/test", ".txt")
 
     Logger.getRootLogger.setLevel(rootLoggerLevel)
     ssc.start()
-    //    ssc.awaitTermination()
 
     while (flag == 0) {
       println("flag: " + flag)
@@ -222,37 +217,21 @@ object KafkaSplittedKMeans {
     }
     val sc = ssc.sparkContext
     println("left loop")
-    //     println(vectorRdd.count())
     vectorRdd.cache()
-    //     val normalizedData = normalizationOfDataBuffer(vectorRdd, sc)
-
     
-
-    
-    //TODO: use return Type of trained models map
     val modelSet = trainModelsForFilterList(vectorRdd, filterRdd, sc)
     
-    
-    
-    
-    
-    
-
-    
     vectorRdd.unpersist(true)
+  
 
    modelSet
-
-    
 
   }
   
   def trainModelsForFilterList(vectorRdd: RDD[(String, Vector)], filterRdd: RDD[String], sc: SparkContext)={
     
-    
     val filterArray = filterRdd.collect()
     val filterSet = filterArray.toSet
-    
     
     val filteredMap = filterSet.map(key => key -> vectorRdd.filter(x => x._1.equals(key)).map(y => y._2))
     
@@ -260,15 +239,9 @@ object KafkaSplittedKMeans {
     for(entryOfFilteredMap <- filteredMap){
       
       resultSet = resultSet.union(Set((entryOfFilteredMap._1, processEntryOfFilteredMap(entryOfFilteredMap._2, sc))))
-      
-      
     }
     
     resultSet
-    
-    
-    
-    
   }
   
   
@@ -276,8 +249,6 @@ object KafkaSplittedKMeans {
     val dim = vectorRdd.first().toArray.size
     val zeroVector = Vectors.dense(Array.fill(dim)(0d))
     val distanceToZeroVector = vectorRdd.map(d => (distToCentroid(d, zeroVector), d))
-    
-    
 
     implicit val sortAscending = new Ordering[(Double, Vector)] {
       override def compare(a: (Double, Vector), b: (Double, Vector)) = {
@@ -291,7 +262,6 @@ object KafkaSplittedKMeans {
         }
       }
     }
-    
     
     //     val array95 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.95).toInt)(sortAscending).map(f=> f._2)
     //     val array99 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.99).toInt)(sortAscending).map(f=> f._2)
@@ -364,14 +334,14 @@ object KafkaSplittedKMeans {
       x.getSpans.asScala.foreach(y => buffer.append((x.getHost, y)))
       buffer
     })
-    //     spanStream.count().print(50);
-    //     spanStream.count().print(); 
-    
-    val spec = StateSpec.function(mappingFunction _)
-    val preparedSpanStream = spanStream.map(x => ("readNames", x))
-    
-    val returnSpanStream = preparedSpanStream.mapWithState(spec)
 
+    
+//    val spec = StateSpec.function(mappingFunction _)
+//    val preparedSpanStream = spanStream.map(x => ("readNames", x))
+//    
+//    val stateSpanStream = preparedSpanStream.mapWithState(spec)
+    
+    
     
     spanStream
 
@@ -389,22 +359,21 @@ object KafkaSplittedKMeans {
         }
         state.update(updatedState)
     }
-
     
     value
-    
   }
 
   def getSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Vector)] = {
 //    val filteredSpanStream = filterSpanStream(spanStream)
-    val spanDurationVectorStream = spanStream.map(x => (x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
+    val spanDurationVectorStream = spanStream.map(x => (x._2.tags().get("http.method")+":"+x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
+//    val spanDurationVectorStream = spanStream.map(x => (x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
     //    val spanDurationStream = filteredSpanStream.map(x => x._2.getAccumulatedMicros)
     spanDurationVectorStream
   }
 
   def getLabeledSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Vector)] = {
     
-    val labledSpanDurationVectorStream = spanStream.map(x => (x._2.getName, x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
+    val labledSpanDurationVectorStream = spanStream.map(x => (x._2.tags().get("http.method")+":"+x._2.getName, x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
     labledSpanDurationVectorStream
   }
 
