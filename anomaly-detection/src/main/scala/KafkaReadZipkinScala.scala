@@ -54,6 +54,8 @@ object KafkaReadZipkinScala {
     
     val ssc = new StreamingContext(sparkConf, Seconds(batchInterval))
     ssc.checkpoint(checkpoint)
+    
+    var tagCollector = ssc.sparkContext.emptyRDD[String]
 
     val kafkaParams = Map[String, Object](
       "bootstrap.servers" -> kafkaServers,
@@ -132,7 +134,7 @@ object KafkaReadZipkinScala {
      
      //Stream with (#,min,max,avg) for Duration of Spans groupedBy their name
      val spanNameDurationStatisticsStream = spanNameDurationStream.map(x => (x._1, (x._2.size, x._2.min, x._2.max, x._2.reduce((a,b) => (a+b)/2))))
-     spanNameDurationStatisticsStream.print(50)
+//     spanNameDurationStatisticsStream.print(50)
          
          
      //groups the stream of span into buckets by TraceId
@@ -156,6 +158,12 @@ object KafkaReadZipkinScala {
 //     spanTraceStreamMaxDurationSpanLogs.print(50)
 
      
+     
+//    spanTagStream.filter(x=> x._2.getName.equals("http:/login")).flatMap(x =>  x._3.keys)
+//    .foreachRDD(rdd=>{
+//      tagCollector = tagCollector.union(rdd).distinct()
+//      tagCollector.collect().foreach(x => println(x))
+//    })
      
     spanErrorStream.foreachRDD(rdd =>
       rdd.foreachPartition(
@@ -188,7 +196,7 @@ object KafkaReadZipkinScala {
                         
                         val message=new ProducerRecord[String, String](errorOutputTopic,null,errorJSON)
                         producer.send(message)
-//                        println(errorJSON)
+                        println(errorJSON)
                     }
                 }
           })

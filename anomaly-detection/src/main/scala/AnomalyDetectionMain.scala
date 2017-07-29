@@ -39,7 +39,7 @@ import org.apache.spark.streaming.dstream.DStream
 import org.apache.spark.streaming.StateSpec
 import org.apache.spark.streaming.State
 
-object KafkaSplittedKMeans {
+object AnomalyDetectionMain {
   //General
   val whitelistedStatusCodes = Array("200", "201")
   val spanNameFilter = "http:/distance"
