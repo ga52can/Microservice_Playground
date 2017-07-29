@@ -83,9 +83,12 @@ object AnomalyDetectionMain {
     
 
     trainingSsc.checkpoint(checkpoint)
-    //val predictor = (model, ninetynine, median, avg, max)
     
-    val result = trainKMeans(trainingSsc);
+    val trainingSpanStream = getSpanStreamFromKafka(trainingSsc, "earliest", "training")
+    
+    val trainingHttpSpanStream = filterSpanStreamForHttpRequests(trainingSpanStream)
+    
+    val result = KafkaSplittedKMeans.trainKMeansOnInitialSpanStream(trainingSsc, trainingHttpSpanStream)
     
     trainingSsc.stop(false,false)
     println("SSC stopped")
@@ -98,7 +101,12 @@ object AnomalyDetectionMain {
     predictionSsc.checkpoint("pred-checkpoint")
 
     val models = result.toMap
-    kMeansAnomalyDetection(predictionSsc, models)
+    
+    val predictionSpanStream = getSpanStreamFromKafka(predictionSsc, "latest", "prediction")
+
+    val predictionHttpSpanStream = filterSpanStreamForHttpRequests(predictionSpanStream)
+    
+    KafkaSplittedKMeans.kMeansAnomalyDetection(predictionSsc, predictionHttpSpanStream, models)
 
   }
   
@@ -127,166 +135,7 @@ object AnomalyDetectionMain {
     println("Average: " + avg)
     println("Max: " + max)
   }
-
-  def kMeansAnomalyDetection(ssc: StreamingContext, models: Map[String,(KMeansModel, Double, Double, Double, Double)]) = {
-    val spanStream = getSpanStreamFromKafka(ssc, "latest", "prediction")
-
-    val httpSpanStream = filterSpanStreamForHttpRequests(spanStream)
-    
-    val labeledSpanDurationVectorStream = getLabeledSpanDurationStreamFromSpanStream(httpSpanStream)
-
-    labeledSpanDurationVectorStream.foreachRDD { rdd =>
-
-      rdd.foreach(x => {
-        if (isAnomaly(x, models)) {
-          reportAnomaly(x._2, x._1)
-        } else {
-          println("no anomaly: "+x._1)
-        }
-      })
-
-    }
-    ssc.start()
-    ssc.awaitTermination()
-  }
-
-  def isAnomaly(dataPoint: (String,Long,Vector), models: Map[String,(KMeansModel, Double, Double, Double, Double)]): Boolean = {
-    val modelTuple = models.get(dataPoint._1).getOrElse(null)
-    
-    if(modelTuple!=null){
-      val model = modelTuple._1
-      val threshold = modelTuple._2  //tuple: (model, ninetynine, median, avg, max) - of SQUAREDISTSANCE
-    val centroid = model.clusterCenters(0) //only works as long as there is only one cluster
-
-    var distance = Vectors.sqdist(centroid, dataPoint._3)
-
-    distance > threshold
-    }else{
-    true
-    }
-
-  }
-
-  def reportAnomaly(id: Long, spanName: String) {
-    println("anomaly: "+spanName+": Span " + id + " is an anomaly")
-  }
-
-  def trainKMeans(ssc: StreamingContext): Set[(String,(KMeansModel, Double, Double, Double, Double))] = {
-    Logger.getRootLogger.setLevel(rootLoggerLevel)
-
-    var filterRdd = ssc.sparkContext.emptyRDD[String]
-    
-    var buffer = new ArrayBuffer[Vector]
-    buffer.append(Vectors.dense(1000.0))
-    var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
-
-    val spanStream = getSpanStreamFromKafka(ssc, "earliest", "training")
-    
-    val httpSpanStream = filterSpanStreamForHttpRequests(spanStream)
-    
-    val spanNameStream = httpSpanStream.map(x=> x._1.getServiceName+"-"+x._2.tags().get("http.method")+":"+x._1.getAddress+":"+x._1.getPort+x._2.getName)
-//    val spanNameStream = spanStream.map(x=>x._2.getName)
-    
-    
-    
-    spanNameStream.foreachRDD(rdd=>{
-      filterRdd = filterRdd.union(rdd).distinct()
-//      filterRdd.foreach(x=> println(x))
-    })
-
-    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(httpSpanStream)
-//    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(spanStream)
-
-    spanDurationVectorStream.foreachRDD { rdd =>
-      if (rdd.count() == 0) {
-        flag = 1
-        //        println("set flag to 1")
-      }
-      println(rdd.count())
-      vectorRdd = vectorRdd.union(rdd)
-
-    }
-
-
-    Logger.getRootLogger.setLevel(rootLoggerLevel)
-    ssc.start()
-
-    while (flag == 0) {
-//      println("flag: " + flag)
-      Thread.sleep(1000)
-    }
-    val sc = ssc.sparkContext
-    println("left loop")
-    vectorRdd.cache()
-    
-    val modelSet = trainModelsForFilterList(vectorRdd, filterRdd, sc)
-    
-    vectorRdd.unpersist(true)
   
-
-   modelSet
-
-  }
-  
-  def trainModelsForFilterList(vectorRdd: RDD[(String, Vector)], filterRdd: RDD[String], sc: SparkContext)={
-    
-    val filterArray = filterRdd.collect()
-    val filterSet = filterArray.toSet
-    
-    val filteredMap = filterSet.map(key => key -> vectorRdd.filter(x => x._1.equals(key)).map(y => y._2))
-    
-    var resultSet = Set[(String, (KMeansModel, Double, Double, Double, Double))]()
-    for(entryOfFilteredMap <- filteredMap){
-      
-      resultSet = resultSet.union(Set((entryOfFilteredMap._1, processEntryOfFilteredMap(entryOfFilteredMap._2, sc))))
-    }
-    
-    resultSet
-  }
-  
-  
-  def processEntryOfFilteredMap(vectorRdd: RDD[Vector], sc: SparkContext) = {
-    val dim = vectorRdd.first().toArray.size
-    val zeroVector = Vectors.dense(Array.fill(dim)(0d))
-    val distanceToZeroVector = vectorRdd.map(d => (distToCentroid(d, zeroVector), d))
-
-    implicit val sortAscending = new Ordering[(Double, Vector)] {
-      override def compare(a: (Double, Vector), b: (Double, Vector)) = {
-        //a.toString.compare(b.toString)
-        if (a._1 < b._1) {
-          -1
-        } else if(a._1 < b._1) {
-          +1
-        }else{
-          0
-        }
-      }
-    }
-    
-    //     val array95 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.95).toInt)(sortAscending).map(f=> f._2)
-    //     val array99 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.99).toInt)(sortAscending).map(f=> f._2)
-    val array999 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count() * 0.999).toInt)(sortAscending).map(f => f._2)
-
-    //     val rdd95 = sc.parallelize(array95)
-    //     val rdd99 = sc.parallelize(array99)
-    val rdd999 = sc.parallelize(array999)
-
-    //     val model = trainModel(vectorRdd)
-    //     val model95 = trainModel(rdd95)
-    //     val model99 = trainModel(rdd99)
-    val model999 = trainModel(rdd999)
-
-    //     val distances = normalizedData.map(d => distToCentroid(d, model))
-
-    //     printStatistics(vectorRdd, model, "All data points")
-//    printStatistics(rdd999, model999, " 99.9 percentile")
-    //     printStatistics(rdd99, model99, " 99 percentile")
-    //     printStatistics(rdd95, model95, " 95 percentile")
-
-     //     val predictor = (model, ninetynine, median, avg, max)
-    modelAndStatistics(rdd999, model999)
-  }
-
   /**
    * autoOffsetReset can either be:
    * "earliest": Reads from the earliest possible value in kafka topic
@@ -346,155 +195,7 @@ object AnomalyDetectionMain {
     spanStream
 
   }
-  
-  def mappingFunction(key: String, value:Option[(Host, Span)], state: State[Set[String]]):Option[(Host, Span)] = {
-    val currentState = state.getOption().getOrElse(Set[String]())
-    val valueTuple = value.getOrElse(null)
-    if(valueTuple!=null){
-        val sizeBefore = currentState.size
-        val updatedState = currentState + valueTuple._2.getName
-        val sizeAfter = updatedState.size
-        if(sizeAfter>sizeBefore){
-          
-        }
-        state.update(updatedState)
-    }
-    
-    value
-  }
 
-  def getSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Vector)] = {
-//    val filteredSpanStream = filterSpanStream(spanStream)
-    val spanDurationVectorStream = spanStream.map(x => (x._1.getServiceName+"-"+x._2.tags().get("http.method")+":"+x._1.getAddress+":"+x._1.getPort+x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
-
-    //    val spanDurationVectorStream = spanStream.map(x => (x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
-    //    val spanDurationStream = filteredSpanStream.map(x => x._2.getAccumulatedMicros)
-    spanDurationVectorStream
-  }
-
-  def getLabeledSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Vector)] = {
-    
-    val labledSpanDurationVectorStream = spanStream.map(x => (x._1.getServiceName+"-"+x._2.tags().get("http.method")+":"+x._1.getAddress+":"+x._1.getPort+x._2.getName, x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
-    labledSpanDurationVectorStream
-  }
-
-
-  def printStatistics(vectorRdd: RDD[Vector], model: KMeansModel, modelDescription: String) = {
-
-    //       val centroid = model.clusterCenters(model.predict(datum)) // if more than 1 center
-    val centroid = model.clusterCenters(0) //if only 1 center
-
-    println("----Model: " + modelDescription + "----")
-
-    println("Centroid: " + centroid)
-
-    val distances = vectorRdd.map(d => distToCentroid(d, centroid))
-
-    val max = Math.sqrt(distances.max())
-    val median = Math.sqrt(rddMedian(distances))
-    val avg = Math.sqrt(distances.reduce(_ + _) / distances.count())
-    val ninetyfive = Math.sqrt(distances.top(Math.ceil(distances.count() * 0.05).toInt).last)
-    val ninetynine = Math.sqrt(distances.top(Math.ceil(distances.count() * 0.01).toInt).last)
-
-    println("Max Distance: " + max)
-    println("Median Distance: " + median)
-    println("Avg Distance: " + avg)
-    println("95% percentile: " + ninetyfive)
-    println("99% percentile: " + ninetynine)
-  }
-
-  /**
-   * returns the following tuple: (model, ninetynine, median, avg, max)
-   *
-   *  model: KMeansModel
-   *  ninetyNine: 99 percentile of squaredistances between vectors and centroid
-   *  median: median of squaredistances between vectors and centroid
-   *  avg: average of squaredistances between vectors and centroid
-   *  max: max of squaredistances between vectors and centroid
-   *
-   */
-  //returns the following tuple: (model, ninetynine, median, avg, max) - of SQUAREDISTSANCE
-  def modelAndStatistics(vectorRdd: RDD[Vector], model: KMeansModel) = {
-
-    //       val centroid = model.clusterCenters(model.predict(datum)) // if more than 1 center
-    val centroid = model.clusterCenters(0) //if only 1 center
-
-    val distances = vectorRdd.map(d => distToCentroid(d, centroid))
-
-    val max = distances.max()
-    val median = rddMedian(distances)
-    val avg = distances.reduce(_ + _) / distances.count()
-    val ninetyfive = distances.top(Math.ceil(distances.count() * 0.05).toInt).last
-    val ninetynine = distances.top(Math.ceil(distances.count() * 0.01).toInt).last
-
-    val modelAndStatistics = (model, ninetynine, median, avg, max)
-    modelAndStatistics
-  }
-
-  /**
-   * Normalization function.
-   * Normalize the training data.
-   */
-  def normalizationOfDataBuffer(data: RDD[Vector], sc: SparkContext): RDD[Vector] = {
-    //    val data = sc.parallelize(dataBuffer)
-    val dataArray = data.map(_.toArray)
-    val numCols = dataArray.first().length
-    val n = dataArray.count()
-    val sums = dataArray.reduce((a, b) => a.zip(b).map(t => t._1 + t._2))
-    val sumSquares = dataArray.fold(new Array[Double](numCols))(
-      (a, b) => a.zip(b).map(t => t._1 + t._2 * t._2))
-    val stdevs = sumSquares.zip(sums).map {
-      case (sumSq, sum) => math.sqrt(n * sumSq - sum * sum) / n
-    }
-
-    stdevs.foreach(f => println("stdevs: " + f))
-    val means = sums.map(_ / n)
-    means.foreach(f => println("means: " + f))
-    def normalize(v: Vector): Vector = {
-      val normed = (v.toArray, means, stdevs).zipped.map {
-        case (value, mean, 0) => (value - mean) / 1 // if stdev is 0
-        case (value, mean, stdev) => (value - mean) / stdev
-      }
-      Vectors.dense(normed)
-    }
-
-    val normalizedData = data.map(normalize(_)) // do nomalization
-    normalizedData
-  }
-
-  /**
-   * Train a KMean model using normalized data.
-   */
-  def trainModel(normalizedData: RDD[Vector]): KMeansModel = {
-    val kmeans = new KMeans()
-    kmeans.setK(k) // find that one center
-    kmeans.setMaxIterations(100)
-    val model = kmeans.run(normalizedData)
-    model
-  }
-
-  def distToCentroid(datum: Vector, centroid: Vector): Double = {
-    //  
-    Vectors.sqdist(datum, centroid)
-  }
-
-  def rddMedian(rdd: RDD[Double]): Double = {
-    var median: Double = 0.0
-    val sorted = rdd.sortBy(identity).zipWithIndex().map {
-      case (v, idx) => (idx, v)
-    }
-
-    val count = sorted.count()
-
-    if (count % 2 == 0) {
-      val l = count / 2 - 1
-      val r = l + 1
-      median = (sorted.lookup(l).head + sorted.lookup(r).head) / 2
-    } else {
-      median = sorted.lookup(count / 2).head
-    }
-    median
-  }
 
 }
 

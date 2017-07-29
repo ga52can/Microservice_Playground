@@ -40,12 +40,6 @@ import org.apache.spark.streaming.StateSpec
 import org.apache.spark.streaming.State
 
 object KafkaSplittedKMeans {
-  //General
-  val whitelistedStatusCodes = Array("200", "201")
-  val spanNameFilter = "http:/distance"
-  //  val spanNameFilter ="http:/login"
-
-  val spanNameFilterSet = Set("http:/business-core-service/businesses/list", "http:/accounting-core-service/drive-now/1/book")
 
   //kMeans
   val k = 1
@@ -54,70 +48,88 @@ object KafkaSplittedKMeans {
   //Logger
   val rootLoggerLevel = Level.WARN
 
-  //Kafka
-  val kafkaServers = "localhost:9092"
-  val sleuthInputTopic = "sleuth"
-  val errorOutputTopic = "error"
-  //  val kafkaAutoOffsetReset = "earliest" //use "earliest" to read as much from queue as possible or "latest" to only get new values
+  /**
+   * If you want to train only on httpSpanStream,
+   * make sure to filter SpanStream before handing over
+   * to this method
+   */
+  def trainKMeansOnInitialSpanStream(ssc: StreamingContext, spanStream: DStream[(Host, Span)]): Set[(String, (KMeansModel, Double, Double, Double, Double))] = {
 
-  //Spark
-  val sparkAppName = "KafkaKMeans"
-  val sparkMaster = "local[4]"
-  val sparkLocalDir = "C:/tmp"
-  val batchInterval = 5
-  val checkpoint = "checkpoint"
+    Logger.getRootLogger.setLevel(rootLoggerLevel)
 
-  //global fields
-  def main(args: Array[String]) {
+    var filterRdd = ssc.sparkContext.emptyRDD[String]
 
-    val sparkConf = new SparkConf().setAppName(sparkAppName).setMaster(sparkMaster)
-      .set("spark.local.dir", sparkLocalDir)
-      .set("spark.driver.allowMultipleContexts", "true")
-
-    sparkConf.registerKryoClasses(Array(classOf[Span]))
-    sparkConf.registerKryoClasses(Array(classOf[Spans]))
-    sparkConf.registerKryoClasses(Array(classOf[java.util.Map[String, String]]))
-
-    val trainingSsc = new StreamingContext(sparkConf, Seconds(batchInterval))
-    val sparkContext = trainingSsc.sparkContext
+    var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
     
+    val spanNameStream = spanStream.map(x => x._1.getServiceName + "-" + x._2.tags().get("http.method") + ":" + x._1.getAddress + ":" + x._1.getPort + x._2.getName)
 
-    trainingSsc.checkpoint(checkpoint)
-    //val predictor = (model, ninetynine, median, avg, max)
-    
-    val result = trainKMeans(trainingSsc);
-    
-    trainingSsc.stop(false,false)
-    println("SSC stopped")
-    
-    for(resultLine <- result){
-      printResultLine(resultLine)
+    //fill the filterRdd with a distinct list of all spanNames that appear in spanNameStream
+    spanNameStream.foreachRDD(rdd => {
+      filterRdd = filterRdd.union(rdd).distinct()
+    })
+
+    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(spanStream)
+
+    spanDurationVectorStream.foreachRDD { rdd =>
+      if (rdd.count() == 0) {
+        flag = 1
+      }
+      println(rdd.count())
+      vectorRdd = vectorRdd.union(rdd)
+
     }
-    
-    val predictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
-    predictionSsc.checkpoint("pred-checkpoint")
 
-    val models = result.toMap
-    kMeansAnomalyDetection(predictionSsc, models)
+    Logger.getRootLogger.setLevel(rootLoggerLevel)
+    ssc.start()
+
+    while (flag == 0) {
+      //      println("flag: " + flag)
+      Thread.sleep(1000)
+    }
+    val sc = ssc.sparkContext
+    println("left loop")
+    vectorRdd.cache()
+
+    val modelSet = trainModelsForFilterList(vectorRdd, filterRdd, sc)
+
+    vectorRdd.unpersist(true)
+
+    modelSet
 
   }
-  
-  def filterSpanStreamForHttpRequests(spanStream: DStream[(Host, Span)]): DStream[(Host, Span)]= {
-    spanStream.filter(x => x._2.tags().keySet().contains("http.method")||x._2.getSpanId==x._2.getTraceId)
+
+  //If you want to predict only on httpSpanStream, make sure to filter SpanStream before handing over to this method
+  def kMeansAnomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (KMeansModel, Double, Double, Double, Double)]) = {
+
+    val labeledSpanDurationVectorStream = getLabeledSpanDurationStreamFromSpanStream(spanStream)
+
+    labeledSpanDurationVectorStream.foreachRDD { rdd =>
+
+      rdd.foreach(x => {
+        if (isAnomaly(x, models)) {
+          reportAnomaly(x._2, x._1)
+        } else {
+          println("no anomaly: " + x._1)
+        }
+      })
+
+    }
+    ssc.start()
+    ssc.awaitTermination()
   }
-  
-  def printResultLine(resultLine: (String,(KMeansModel, Double, Double, Double, Double)))={
-    
+
+  private def printResultLine(resultLine: (String, (KMeansModel, Double, Double, Double, Double))) = {
+
     val result = resultLine._2
     val spanName = resultLine._1
-    
+
     val model = result._1
     val percentile99 = Math.sqrt(result._2)
     val median = Math.sqrt(result._3)
     val avg = Math.sqrt(result._4)
     val max = Math.sqrt(result._5)
 
-    println("----Results for "+ spanName +"----")
+    println("----Results for " + spanName + "----")
     for (i <- 0 until model.clusterCenters.length) {
       println("Centroid: " + model.clusterCenters(i))
     }
@@ -128,124 +140,44 @@ object KafkaSplittedKMeans {
     println("Max: " + max)
   }
 
-  def kMeansAnomalyDetection(ssc: StreamingContext, models: Map[String,(KMeansModel, Double, Double, Double, Double)]) = {
-    val spanStream = getSpanStreamFromKafka(ssc, "latest", "prediction")
-
-    val httpSpanStream = filterSpanStreamForHttpRequests(spanStream)
-    
-    val labeledSpanDurationVectorStream = getLabeledSpanDurationStreamFromSpanStream(httpSpanStream)
-
-    labeledSpanDurationVectorStream.foreachRDD { rdd =>
-
-      rdd.foreach(x => {
-        if (isAnomaly(x, models)) {
-          reportAnomaly(x._2, x._1)
-        } else {
-          println("no anomaly: "+x._1)
-        }
-      })
-
-    }
-    ssc.start()
-    ssc.awaitTermination()
-  }
-
-  def isAnomaly(dataPoint: (String,Long,Vector), models: Map[String,(KMeansModel, Double, Double, Double, Double)]): Boolean = {
+  private def isAnomaly(dataPoint: (String, Long, Vector), models: Map[String, (KMeansModel, Double, Double, Double, Double)]): Boolean = {
     val modelTuple = models.get(dataPoint._1).getOrElse(null)
-    
-    if(modelTuple!=null){
+
+    if (modelTuple != null) {
       val model = modelTuple._1
-      val threshold = modelTuple._2  //tuple: (model, ninetynine, median, avg, max) - of SQUAREDISTSANCE
-    val centroid = model.clusterCenters(0) //only works as long as there is only one cluster
+      val threshold = modelTuple._2 //tuple: (model, ninetynine, median, avg, max) - of SQUAREDISTSANCE
+      val centroid = model.clusterCenters(0) //only works as long as there is only one cluster
 
-    var distance = Vectors.sqdist(centroid, dataPoint._3)
+      var distance = Vectors.sqdist(centroid, dataPoint._3)
 
-    distance > threshold
-    }else{
-    true
+      distance > threshold
+    } else {
+      true
     }
 
   }
 
-  def reportAnomaly(id: Long, spanName: String) {
-    println("anomaly: "+spanName+": Span " + id + " is an anomaly")
+  private def reportAnomaly(id: Long, spanName: String) {
+    println("anomaly: " + spanName + ": Span " + id + " is an anomaly")
   }
 
-  def trainKMeans(ssc: StreamingContext): Set[(String,(KMeansModel, Double, Double, Double, Double))] = {
-    Logger.getRootLogger.setLevel(rootLoggerLevel)
+  private def trainModelsForFilterList(vectorRdd: RDD[(String, Vector)], filterRdd: RDD[String], sc: SparkContext) = {
 
-    var filterRdd = ssc.sparkContext.emptyRDD[String]
-    
-    var buffer = new ArrayBuffer[Vector]
-    buffer.append(Vectors.dense(1000.0))
-    var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
-
-    val spanStream = getSpanStreamFromKafka(ssc, "earliest", "training")
-    
-    val httpSpanStream = filterSpanStreamForHttpRequests(spanStream)
-    
-    val spanNameStream = httpSpanStream.map(x=> x._1.getServiceName+"-"+x._2.tags().get("http.method")+":"+x._1.getAddress+":"+x._1.getPort+x._2.getName)
-//    val spanNameStream = spanStream.map(x=>x._2.getName)
-    
-    
-    
-    spanNameStream.foreachRDD(rdd=>{
-      filterRdd = filterRdd.union(rdd).distinct()
-//      filterRdd.foreach(x=> println(x))
-    })
-
-    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(httpSpanStream)
-//    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(spanStream)
-
-    spanDurationVectorStream.foreachRDD { rdd =>
-      if (rdd.count() == 0) {
-        flag = 1
-        //        println("set flag to 1")
-      }
-      println(rdd.count())
-      vectorRdd = vectorRdd.union(rdd)
-
-    }
-
-
-    Logger.getRootLogger.setLevel(rootLoggerLevel)
-    ssc.start()
-
-    while (flag == 0) {
-//      println("flag: " + flag)
-      Thread.sleep(1000)
-    }
-    val sc = ssc.sparkContext
-    println("left loop")
-    vectorRdd.cache()
-    
-    val modelSet = trainModelsForFilterList(vectorRdd, filterRdd, sc)
-    
-    vectorRdd.unpersist(true)
-  
-
-   modelSet
-
-  }
-  
-  def trainModelsForFilterList(vectorRdd: RDD[(String, Vector)], filterRdd: RDD[String], sc: SparkContext)={
-    
     val filterArray = filterRdd.collect()
     val filterSet = filterArray.toSet
-    
+
     val filteredMap = filterSet.map(key => key -> vectorRdd.filter(x => x._1.equals(key)).map(y => y._2))
-    
+
     var resultSet = Set[(String, (KMeansModel, Double, Double, Double, Double))]()
-    for(entryOfFilteredMap <- filteredMap){
-      
+    for (entryOfFilteredMap <- filteredMap) {
+
       resultSet = resultSet.union(Set((entryOfFilteredMap._1, processEntryOfFilteredMap(entryOfFilteredMap._2, sc))))
     }
-    
+
     resultSet
   }
-  
-  
-  def processEntryOfFilteredMap(vectorRdd: RDD[Vector], sc: SparkContext) = {
+
+  private def processEntryOfFilteredMap(vectorRdd: RDD[Vector], sc: SparkContext) = {
     val dim = vectorRdd.first().toArray.size
     val zeroVector = Vectors.dense(Array.fill(dim)(0d))
     val distanceToZeroVector = vectorRdd.map(d => (distToCentroid(d, zeroVector), d))
@@ -255,14 +187,14 @@ object KafkaSplittedKMeans {
         //a.toString.compare(b.toString)
         if (a._1 < b._1) {
           -1
-        } else if(a._1 < b._1) {
+        } else if (a._1 < b._1) {
           +1
-        }else{
+        } else {
           0
         }
       }
     }
-    
+
     //     val array95 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.95).toInt)(sortAscending).map(f=> f._2)
     //     val array99 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count()*0.99).toInt)(sortAscending).map(f=> f._2)
     val array999 = distanceToZeroVector.takeOrdered(Math.ceil(distanceToZeroVector.count() * 0.999).toInt)(sortAscending).map(f => f._2)
@@ -279,107 +211,30 @@ object KafkaSplittedKMeans {
     //     val distances = normalizedData.map(d => distToCentroid(d, model))
 
     //     printStatistics(vectorRdd, model, "All data points")
-//    printStatistics(rdd999, model999, " 99.9 percentile")
+    //    printStatistics(rdd999, model999, " 99.9 percentile")
     //     printStatistics(rdd99, model99, " 99 percentile")
     //     printStatistics(rdd95, model95, " 95 percentile")
 
-     //     val predictor = (model, ninetynine, median, avg, max)
+    //     val predictor = (model, ninetynine, median, avg, max)
     modelAndStatistics(rdd999, model999)
   }
 
-  /**
-   * autoOffsetReset can either be:
-   * "earliest": Reads from the earliest possible value in kafka topic
-   * "latest": Reads only the most recent values from kafka topic
-   *
-   */
-  //TODO: Think about making autoOffsetReset an enum
-  def getSpanStreamFromKafka(ssc: StreamingContext, autoOffsetReset: String, groupId: String): DStream[(Host, Span)] = {
-
-    val kafkaParams = Map[String, Object](
-      "bootstrap.servers" -> kafkaServers,
-      "key.deserializer" -> classOf[StringDeserializer],
-      "value.deserializer" -> classOf[StringDeserializer],
-      "group.id" -> groupId,
-      "auto.offset.reset" -> autoOffsetReset,
-      "enable.auto.commit" -> (false: java.lang.Boolean))
-
-    val topics = Array(sleuthInputTopic)
-    
-
-    val sleuthWithHeader = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams)).map(_.value())
-    
-    //    Would be a better way if it was not necessary to create a stream
-    //    val sleuthBatch = KafkaUtils.createRDD(ssc.sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent)
-
-    val json = sleuthWithHeader.map(x => x.substring(x.indexOf("{\"host\":")))
-    //    json.print(1000)
-
-    val spansStream = json.map(x =>
-      {
-        val mapper = new ObjectMapper() with ScalaObjectMapper
-        mapper.registerModule(DefaultScalaModule)
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        mapper.readValue[Spans](x, classOf[Spans])
-
-      })
-
-    //Stream that maps the each Spans object as a Tuple of ServiceName and a List of its associated Spans
-    val serviceStream = spansStream.map(x => (x.getHost.getServiceName, x.getSpans.asScala)).groupByKey()
-    //      serviceStream.print(25)
-
-    //Stream of all Spans that come from Kafka
-    val spanStream = spansStream.flatMap(x => {
-      var buffer = ArrayBuffer[(Host, Span)]()
-      x.getSpans.asScala.foreach(y => buffer.append((x.getHost, y)))
-      buffer
-    })
-
-    
-//    val spec = StateSpec.function(mappingFunction _)
-//    val preparedSpanStream = spanStream.map(x => ("readNames", x))
-//    
-//    val stateSpanStream = preparedSpanStream.mapWithState(spec)
-    
-    
-    
-    spanStream
-
-  }
-  
-  def mappingFunction(key: String, value:Option[(Host, Span)], state: State[Set[String]]):Option[(Host, Span)] = {
-    val currentState = state.getOption().getOrElse(Set[String]())
-    val valueTuple = value.getOrElse(null)
-    if(valueTuple!=null){
-        val sizeBefore = currentState.size
-        val updatedState = currentState + valueTuple._2.getName
-        val sizeAfter = updatedState.size
-        if(sizeAfter>sizeBefore){
-          
-        }
-        state.update(updatedState)
-    }
-    
-    value
-  }
-
-  def getSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Vector)] = {
-//    val filteredSpanStream = filterSpanStream(spanStream)
-    val spanDurationVectorStream = spanStream.map(x => (x._1.getServiceName+"-"+x._2.tags().get("http.method")+":"+x._1.getAddress+":"+x._1.getPort+x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
+  private def getSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Vector)] = {
+    //    val filteredSpanStream = filterSpanStream(spanStream)
+    val spanDurationVectorStream = spanStream.map(x => (x._1.getServiceName + "-" + x._2.tags().get("http.method") + ":" + x._1.getAddress + ":" + x._1.getPort + x._2.getName, Vectors.dense(x._2.getAccumulatedMicros)))
 
     //    val spanDurationVectorStream = spanStream.map(x => (x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
     //    val spanDurationStream = filteredSpanStream.map(x => x._2.getAccumulatedMicros)
     spanDurationVectorStream
   }
 
-  def getLabeledSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Vector)] = {
-    
-    val labledSpanDurationVectorStream = spanStream.map(x => (x._1.getServiceName+"-"+x._2.tags().get("http.method")+":"+x._1.getAddress+":"+x._1.getPort+x._2.getName, x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
+  private def getLabeledSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Vector)] = {
+
+    val labledSpanDurationVectorStream = spanStream.map(x => (x._1.getServiceName + "-" + x._2.tags().get("http.method") + ":" + x._1.getAddress + ":" + x._1.getPort + x._2.getName, x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
     labledSpanDurationVectorStream
   }
 
-
-  def printStatistics(vectorRdd: RDD[Vector], model: KMeansModel, modelDescription: String) = {
+  private def printStatistics(vectorRdd: RDD[Vector], model: KMeansModel, modelDescription: String) = {
 
     //       val centroid = model.clusterCenters(model.predict(datum)) // if more than 1 center
     val centroid = model.clusterCenters(0) //if only 1 center
@@ -413,10 +268,8 @@ object KafkaSplittedKMeans {
    *  max: max of squaredistances between vectors and centroid
    *
    */
-  //returns the following tuple: (model, ninetynine, median, avg, max) - of SQUAREDISTSANCE
-  def modelAndStatistics(vectorRdd: RDD[Vector], model: KMeansModel) = {
+  private def modelAndStatistics(vectorRdd: RDD[Vector], model: KMeansModel) = {
 
-    //       val centroid = model.clusterCenters(model.predict(datum)) // if more than 1 center
     val centroid = model.clusterCenters(0) //if only 1 center
 
     val distances = vectorRdd.map(d => distToCentroid(d, centroid))
@@ -432,40 +285,9 @@ object KafkaSplittedKMeans {
   }
 
   /**
-   * Normalization function.
-   * Normalize the training data.
-   */
-  def normalizationOfDataBuffer(data: RDD[Vector], sc: SparkContext): RDD[Vector] = {
-    //    val data = sc.parallelize(dataBuffer)
-    val dataArray = data.map(_.toArray)
-    val numCols = dataArray.first().length
-    val n = dataArray.count()
-    val sums = dataArray.reduce((a, b) => a.zip(b).map(t => t._1 + t._2))
-    val sumSquares = dataArray.fold(new Array[Double](numCols))(
-      (a, b) => a.zip(b).map(t => t._1 + t._2 * t._2))
-    val stdevs = sumSquares.zip(sums).map {
-      case (sumSq, sum) => math.sqrt(n * sumSq - sum * sum) / n
-    }
-
-    stdevs.foreach(f => println("stdevs: " + f))
-    val means = sums.map(_ / n)
-    means.foreach(f => println("means: " + f))
-    def normalize(v: Vector): Vector = {
-      val normed = (v.toArray, means, stdevs).zipped.map {
-        case (value, mean, 0) => (value - mean) / 1 // if stdev is 0
-        case (value, mean, stdev) => (value - mean) / stdev
-      }
-      Vectors.dense(normed)
-    }
-
-    val normalizedData = data.map(normalize(_)) // do nomalization
-    normalizedData
-  }
-
-  /**
    * Train a KMean model using normalized data.
    */
-  def trainModel(normalizedData: RDD[Vector]): KMeansModel = {
+  private def trainModel(normalizedData: RDD[Vector]): KMeansModel = {
     val kmeans = new KMeans()
     kmeans.setK(k) // find that one center
     kmeans.setMaxIterations(100)
@@ -473,12 +295,11 @@ object KafkaSplittedKMeans {
     model
   }
 
-  def distToCentroid(datum: Vector, centroid: Vector): Double = {
-    //  
+  private def distToCentroid(datum: Vector, centroid: Vector): Double = {
     Vectors.sqdist(datum, centroid)
   }
 
-  def rddMedian(rdd: RDD[Double]): Double = {
+  private def rddMedian(rdd: RDD[Double]): Double = {
     var median: Double = 0.0
     val sorted = rdd.sortBy(identity).zipWithIndex().map {
       case (v, idx) => (idx, v)
