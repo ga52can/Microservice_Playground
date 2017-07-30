@@ -26,20 +26,6 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 			System.out.println("Issue while trying to access cpu utilization information");
 		}
 
-//		JStatData data = JStatData.connect(pid());
-//		for (JStatData.Counter<?> c : data.getAllCounters().values()) {
-//			if (c.getName().equals("sun.gc.collector.0.time") || c.getName().equals("sun.gc.collector.1.time")
-//					|| c.getName().equals("sun.gc.collector.0.invocations")
-//					|| c.getName().equals("sun.gc.collector.1.invocations")) {
-//				String message = c.getName() + ";" + c.getUnits() + ";" + c.getVariability() + ";" + c.getValue();
-//				if (c instanceof StringCounter) {
-//					String val = (String) c.getValue();
-//					message = message + val;
-//				}
-//				span.tag(c.getName(), "" + c.getValue());
-//				System.out.println(message);
-//			}
-//		}
 		
         int mb = 1024*1024;
 		
@@ -49,20 +35,19 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 		Long freeMemory = runtime.freeMemory()/ mb;
 		Long maxMemory = runtime.maxMemory()/mb;
 		Long usedMemory = totalMemory - freeMemory;
+		Long memoryUtilization = (long) ((usedMemory.doubleValue()/maxMemory.doubleValue())*100);
 		
 		span.tag("jvm.usedMemory.mb", usedMemory+"");
 		span.tag("jvm.totalMemory.mb", totalMemory+"");
 		span.tag("jvm.freeMemory.mb", freeMemory+"");
 		span.tag("jvm.maxMemory.mb", maxMemory+"");
+		System.out.println(memoryUtilization);
+		span.tag("jvm.memoryUtilization", memoryUtilization+"");
 
 		return span;
 	}
 
-	private int pid() {
-		String name = ManagementFactory.getRuntimeMXBean().getName();
-		name = name.substring(0, name.indexOf("@"));
-		return Integer.parseInt(name);
-	}
+
 
 	public static double getProcessCpuLoad() throws Exception {
 

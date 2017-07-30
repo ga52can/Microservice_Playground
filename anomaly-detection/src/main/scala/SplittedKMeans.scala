@@ -114,8 +114,6 @@ object KafkaSplittedKMeans {
       })
 
     }
-    ssc.start()
-    ssc.awaitTermination()
   }
 
   private def printResultLine(resultLine: (String, (KMeansModel, Double, Double, Double, Double))) = {

@@ -106,8 +106,18 @@ object AnomalyDetectionMain {
 
     val predictionHttpSpanStream = filterSpanStreamForHttpRequests(predictionSpanStream)
     
+    ErrorDetection.errorDetection(predictionSpanStream, false) //do not write to Kafka - just print errors
+    
+    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilization", 100, true, false)
+    
+    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 85, true, false)
+
+    
+    
     KafkaSplittedKMeans.kMeansAnomalyDetection(predictionSsc, predictionHttpSpanStream, models)
 
+    predictionSsc.start()
+    predictionSsc.awaitTermination()
   }
   
   def filterSpanStreamForHttpRequests(spanStream: DStream[(Host, Span)]): DStream[(Host, Span)]= {
