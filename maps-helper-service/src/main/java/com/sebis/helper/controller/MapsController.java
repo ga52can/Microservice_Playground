@@ -42,7 +42,11 @@ public class MapsController {
                     return new City(id, cityName, latitude, longitude);
                 }
         );
+        //simulate uncaught exception
+//        String test = null;
+//        test.charAt(5);
         
+        //simulate performance issue
         try {
 			Thread.sleep(0);
 		} catch (InterruptedException e) {
