@@ -80,62 +80,86 @@ object AnomalyDetectionMain {
 
     val trainingSsc = new StreamingContext(sparkConf, Seconds(batchInterval))
     val sparkContext = trainingSsc.sparkContext
-    
 
-    trainingSsc.checkpoint(checkpoint)
+//    trainingSsc.checkpoint(checkpoint)
+//
+//    val trainingSpanStream = getSpanStreamFromKafka(trainingSsc, "earliest", "training")
+//
+//    val trainingHttpSpanStream = filterSpanStreamForHttpRequests(trainingSpanStream)
+//
+//    val splittedKMeansResult = KafkaSplittedKMeans.train(trainingSsc, trainingHttpSpanStream)
+//
+//    println("SplittedKmeans finished training")
+    trainingSsc.stop(false, false)
     
-    val trainingSpanStream = getSpanStreamFromKafka(trainingSsc, "earliest", "training")
     
-    val trainingHttpSpanStream = filterSpanStreamForHttpRequests(trainingSpanStream)
-    
-    val result = KafkaSplittedKMeans.trainKMeansOnInitialSpanStream(trainingSsc, trainingHttpSpanStream)
-    
-    trainingSsc.stop(false,false)
-    println("SSC stopped")
-    
-    for(resultLine <- result){
-      printResultLine(resultLine)
+    val statisticsPredictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
+    val statisticsTrainingSpanStream = StreamUtil.getSpanStreamFromKafka(statisticsPredictionSsc, "earliest", "statisticstraining", kafkaServers, sleuthInputTopic)
+    val statisticsTrainingHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(statisticsTrainingSpanStream)
+    val singleValueStatisticsResult = SingleValueStatistics.train(statisticsPredictionSsc, statisticsTrainingHttpSpanStream)
+
+    statisticsPredictionSsc.stop(false, false)
+    println("SingleValueStatistics finished training")
+
+//    println("-----------------------------------------------------")
+//    println("-------------------SplittedKMeans--------------------")
+//    println("-----------------------------------------------------")
+//    for (resultLine <- splittedKMeansResult) {
+//
+//      printResultLine(resultLine)
+//    }
+
+    println("-----------------------------------------------------")
+    println("----------------SingleValueStatistics----------------")
+    println("-----------------------------------------------------")
+    for (resultLine <- singleValueStatisticsResult) {
+      val statistics = resultLine._2
+
+      printSingleValueStatistics(resultLine._1, statistics._1, statistics._2, statistics._3, statistics._4, statistics._5, statistics._6, statistics._7, statistics._8)
+
     }
-    
+
     val predictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
     predictionSsc.checkpoint("pred-checkpoint")
 
-    val models = result.toMap
-    
-    val predictionSpanStream = getSpanStreamFromKafka(predictionSsc, "latest", "prediction")
+//    val splittedKMeansModels = splittedKMeansResult.toMap
 
-    val predictionHttpSpanStream = filterSpanStreamForHttpRequests(predictionSpanStream)
-    
-    ErrorDetection.errorDetection(predictionSpanStream, false) //do not write to Kafka - just print errors
-    
-    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilization", 100, true, false)
-    
-    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 85, true, false)
+    val singleValueStatisticsModels = singleValueStatisticsResult.toMap
 
-    
-    
-    KafkaSplittedKMeans.kMeansAnomalyDetection(predictionSsc, predictionHttpSpanStream, models)
+    val predictionSpanStream = StreamUtil.getSpanStreamFromKafka(predictionSsc, "latest", "prediction", kafkaServers, sleuthInputTopic)
+
+    val predictionHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(predictionSpanStream)
+
+    //    ErrorDetection.errorDetection(predictionSpanStream, false) //do not write to Kafka - just print errors
+
+    //    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilization", 99, true, false)
+
+    //    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, true, false)
+
+    //    KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionHttpSpanStream, splittedKMeansModels)
+
+    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels)
 
     predictionSsc.start()
     predictionSsc.awaitTermination()
   }
-  
-  def filterSpanStreamForHttpRequests(spanStream: DStream[(Host, Span)]): DStream[(Host, Span)]= {
-    spanStream.filter(x => x._2.tags().keySet().contains("http.method")||x._2.getSpanId==x._2.getTraceId)
-  }
-  
-  def printResultLine(resultLine: (String,(KMeansModel, Double, Double, Double, Double)))={
-    
+
+
+
+
+
+  private def printResultLine(resultLine: (String, (KMeansModel, Double, Double, Double, Double))) = {
+
     val result = resultLine._2
     val spanName = resultLine._1
-    
+
     val model = result._1
     val percentile99 = Math.sqrt(result._2)
     val median = Math.sqrt(result._3)
     val avg = Math.sqrt(result._4)
     val max = Math.sqrt(result._5)
 
-    println("----Results for "+ spanName +"----")
+    println("----Results for " + spanName + "----")
     for (i <- 0 until model.clusterCenters.length) {
       println("Centroid: " + model.clusterCenters(i))
     }
@@ -145,66 +169,23 @@ object AnomalyDetectionMain {
     println("Average: " + avg)
     println("Max: " + max)
   }
-  
-  /**
-   * autoOffsetReset can either be:
-   * "earliest": Reads from the earliest possible value in kafka topic
-   * "latest": Reads only the most recent values from kafka topic
-   *
-   */
-  //TODO: Think about making autoOffsetReset an enum
-  def getSpanStreamFromKafka(ssc: StreamingContext, autoOffsetReset: String, groupId: String): DStream[(Host, Span)] = {
 
-    val kafkaParams = Map[String, Object](
-      "bootstrap.servers" -> kafkaServers,
-      "key.deserializer" -> classOf[StringDeserializer],
-      "value.deserializer" -> classOf[StringDeserializer],
-      "group.id" -> groupId,
-      "auto.offset.reset" -> autoOffsetReset,
-      "enable.auto.commit" -> (false: java.lang.Boolean))
 
-    val topics = Array(sleuthInputTopic)
-    
 
-    val sleuthWithHeader = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams)).map(_.value())
-    
-    //    Would be a better way if it was not necessary to create a stream
-    //    val sleuthBatch = KafkaUtils.createRDD(ssc.sparkContext, kafkaParams, offsetRanges, LocationStrategies.PreferConsistent)
+  private def printSingleValueStatistics(endpointName: String, min: Long, max: Long, avg: Long, twentyfive: Long, median: Long, seventyfive: Long, ninetyfive: Long, ninetynine: Long) = {
 
-    val json = sleuthWithHeader.map(x => x.substring(x.indexOf("{\"host\":")))
-    //    json.print(1000)
+    println("----Statistics for: " + endpointName + "----")
 
-    val spansStream = json.map(x =>
-      {
-        val mapper = new ObjectMapper() with ScalaObjectMapper
-        mapper.registerModule(DefaultScalaModule)
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        mapper.readValue[Spans](x, classOf[Spans])
-
-      })
-
-    //Stream that maps the each Spans object as a Tuple of ServiceName and a List of its associated Spans
-    val serviceStream = spansStream.map(x => (x.getHost.getServiceName, x.getSpans.asScala)).groupByKey()
-    //      serviceStream.print(25)
-
-    //Stream of all Spans that come from Kafka
-    val spanStream = spansStream.flatMap(x => {
-      var buffer = ArrayBuffer[(Host, Span)]()
-      x.getSpans.asScala.foreach(y => buffer.append((x.getHost, y)))
-      buffer
-    })
-
-    
-//    val spec = StateSpec.function(mappingFunction _)
-//    val preparedSpanStream = spanStream.map(x => ("readNames", x))
-//    
-//    val stateSpanStream = preparedSpanStream.mapWithState(spec)
-    
-    
-    
-    spanStream
-
+    println("Min: " + min)
+    println("Max: " + max)
+    println("Avg: " + avg)
+    println("25% percentile: " + twentyfive)
+    println("Median: " + median)
+    println("75% percentile: " + seventyfive)
+    println("95% percentile: " + ninetyfive)
+    println("99% percentile: " + ninetynine)
   }
+
 
 
 }

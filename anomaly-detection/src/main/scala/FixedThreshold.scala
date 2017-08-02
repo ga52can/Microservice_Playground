@@ -58,7 +58,7 @@ object FixedThreshold {
         try{
         val value = x._3.toDouble
         if (value > threshold) {
-          println("checking treshold for "+tagToMonitor)
+          
           if (writeToKafka) {
             reportAnomaly(value, threshold, tagToMonitor, x._2, x._1, true, true)
           } else {

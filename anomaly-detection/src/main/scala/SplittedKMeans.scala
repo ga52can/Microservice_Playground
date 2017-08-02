@@ -53,7 +53,7 @@ object KafkaSplittedKMeans {
    * make sure to filter SpanStream before handing over
    * to this method
    */
-  def trainKMeansOnInitialSpanStream(ssc: StreamingContext, spanStream: DStream[(Host, Span)]): Set[(String, (KMeansModel, Double, Double, Double, Double))] = {
+  def train(ssc: StreamingContext, spanStream: DStream[(Host, Span)]): Set[(String, (KMeansModel, Double, Double, Double, Double))] = {
 
     Logger.getRootLogger.setLevel(rootLoggerLevel)
 
@@ -61,14 +61,14 @@ object KafkaSplittedKMeans {
 
     var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
     
-    val spanNameStream = spanStream.map(x => x._1.getServiceName + "-" + x._2.tags().get("http.method") + ":" + x._1.getAddress + ":" + x._1.getPort + x._2.getName)
-
+    val spanNameStream = StreamUtil.getSpanNameStreamFromSpanStream(spanStream)
+    
     //fill the filterRdd with a distinct list of all spanNames that appear in spanNameStream
     spanNameStream.foreachRDD(rdd => {
       filterRdd = filterRdd.union(rdd).distinct()
     })
 
-    val spanDurationVectorStream = getSpanDurationStreamFromSpanStream(spanStream)
+    val spanDurationVectorStream = StreamUtil.getSpanDurationVectorStreamFromSpanStream(spanStream)
 
     spanDurationVectorStream.foreachRDD { rdd =>
       if (rdd.count() == 0) {
@@ -99,9 +99,9 @@ object KafkaSplittedKMeans {
   }
 
   //If you want to predict only on httpSpanStream, make sure to filter SpanStream before handing over to this method
-  def kMeansAnomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (KMeansModel, Double, Double, Double, Double)]) = {
+  def anomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (KMeansModel, Double, Double, Double, Double)]) = {
 
-    val labeledSpanDurationVectorStream = getLabeledSpanDurationStreamFromSpanStream(spanStream)
+    val labeledSpanDurationVectorStream = StreamUtil.getLabeledSpanDurationVectorStreamFromSpanStream(spanStream)
 
     labeledSpanDurationVectorStream.foreachRDD { rdd =>
 
@@ -116,27 +116,7 @@ object KafkaSplittedKMeans {
     }
   }
 
-  private def printResultLine(resultLine: (String, (KMeansModel, Double, Double, Double, Double))) = {
 
-    val result = resultLine._2
-    val spanName = resultLine._1
-
-    val model = result._1
-    val percentile99 = Math.sqrt(result._2)
-    val median = Math.sqrt(result._3)
-    val avg = Math.sqrt(result._4)
-    val max = Math.sqrt(result._5)
-
-    println("----Results for " + spanName + "----")
-    for (i <- 0 until model.clusterCenters.length) {
-      println("Centroid: " + model.clusterCenters(i))
-    }
-    println("----Distances----")
-    println("99 percentile: " + percentile99)
-    println("Median: " + median)
-    println("Average: " + avg)
-    println("Max: " + max)
-  }
 
   private def isAnomaly(dataPoint: (String, Long, Vector), models: Map[String, (KMeansModel, Double, Double, Double, Double)]): Boolean = {
     val modelTuple = models.get(dataPoint._1).getOrElse(null)
@@ -217,20 +197,8 @@ object KafkaSplittedKMeans {
     modelAndStatistics(rdd999, model999)
   }
 
-  private def getSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Vector)] = {
-    //    val filteredSpanStream = filterSpanStream(spanStream)
-    val spanDurationVectorStream = spanStream.map(x => (x._1.getServiceName + "-" + x._2.tags().get("http.method") + ":" + x._1.getAddress + ":" + x._1.getPort + x._2.getName, Vectors.dense(x._2.getAccumulatedMicros)))
 
-    //    val spanDurationVectorStream = spanStream.map(x => (x._2.getName,Vectors.dense(x._2.getAccumulatedMicros)))
-    //    val spanDurationStream = filteredSpanStream.map(x => x._2.getAccumulatedMicros)
-    spanDurationVectorStream
-  }
 
-  private def getLabeledSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Vector)] = {
-
-    val labledSpanDurationVectorStream = spanStream.map(x => (x._1.getServiceName + "-" + x._2.tags().get("http.method") + ":" + x._1.getAddress + ":" + x._1.getPort + x._2.getName, x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
-    labledSpanDurationVectorStream
-  }
 
   private def printStatistics(vectorRdd: RDD[Vector], model: KMeansModel, modelDescription: String) = {
 
