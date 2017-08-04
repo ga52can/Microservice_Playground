@@ -30,9 +30,21 @@ import org.apache.spark.mllib.linalg.Vector
 
 object StreamUtil {
 
-  def getIdentifierFromHostAndSpan(host: Host, span: Span): String = {
+  def getEndpointIdentifierFromHostAndSpan(host: Host, span: Span): String = {
     var identifier = host.getServiceName + "-" + span.tags().get("http.method") + ":" + host.getAddress + ":" + host.getPort + span.getName
     identifier
+  }
+
+  def generateAnomalyJSON(host: Host, span: Span, anomalyDescriptor: String): String = {
+    val endpointIdentifier = getEndpointIdentifierFromHostAndSpan(host, span)
+    val spanId = span.getSpanId
+    val traceId = span.getTraceId
+    val begin = span.getBegin
+    val end = span.getEnd
+
+    val errorJSON = "{\"endpointIdentifier\":\"" + endpointIdentifier + "\", \"spanId\":\"" + spanId + "\", \"traceId\":\"" + traceId + "\", \"begin\":\"" + begin + "\", \"end\":\"" + end + "\"}"
+    errorJSON
+
   }
 
   /**
@@ -83,27 +95,37 @@ object StreamUtil {
   }
 
   def getSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long)] = {
-    val spanDurationStream = spanStream.map(x => (getIdentifierFromHostAndSpan(x._1, x._2), x._2.getAccumulatedMicros))
+    val spanDurationStream = spanStream.map(x => (getEndpointIdentifierFromHostAndSpan(x._1, x._2), x._2.getAccumulatedMicros))
     spanDurationStream
   }
 
   def getLabeledSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Long)] = {
-    val labledSpanDurationVectorStream = spanStream.map(x => (getIdentifierFromHostAndSpan(x._1, x._2), x._2.getSpanId, x._2.getAccumulatedMicros))
+    val labledSpanDurationVectorStream = spanStream.map(x => (getEndpointIdentifierFromHostAndSpan(x._1, x._2), x._2.getSpanId, x._2.getAccumulatedMicros))
     labledSpanDurationVectorStream
   }
 
+  def getFullInformationSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(Host, Span, Long)] = {
+    val fullInformationSpanDurationVectorStream = spanStream.map(x => (x._1, x._2, x._2.getAccumulatedMicros))
+    fullInformationSpanDurationVectorStream
+  }
+
   def getSpanDurationVectorStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Vector)] = {
-    val spanDurationVectorStream = spanStream.map(x => (getIdentifierFromHostAndSpan(x._1, x._2), Vectors.dense(x._2.getAccumulatedMicros)))
+    val spanDurationVectorStream = spanStream.map(x => (getEndpointIdentifierFromHostAndSpan(x._1, x._2), Vectors.dense(x._2.getAccumulatedMicros)))
     spanDurationVectorStream
   }
 
   def getLabeledSpanDurationVectorStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Vector)] = {
-    val labledSpanDurationVectorStream = spanStream.map(x => (getIdentifierFromHostAndSpan(x._1, x._2), x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
+    val labledSpanDurationVectorStream = spanStream.map(x => (getEndpointIdentifierFromHostAndSpan(x._1, x._2), x._2.getSpanId, Vectors.dense(x._2.getAccumulatedMicros)))
     labledSpanDurationVectorStream
   }
 
+  def getFullInformationSpanDurationVectorStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(Host, Span, Vector)] = {
+    val fullInformationSpanDurationVectorStream = spanStream.map(x => (x._1, x._2, Vectors.dense(x._2.getAccumulatedMicros)))
+    fullInformationSpanDurationVectorStream
+  }
+
   def getSpanNameStreamFromSpanStream(spanStream: DStream[(Host, Span)]) = {
-    val spanNameStream = spanStream.map(x => getIdentifierFromHostAndSpan(x._1, x._2))
+    val spanNameStream = spanStream.map(x => getEndpointIdentifierFromHostAndSpan(x._1, x._2))
     spanNameStream
   }
 

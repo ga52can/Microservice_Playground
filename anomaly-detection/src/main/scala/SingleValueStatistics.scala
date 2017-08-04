@@ -102,21 +102,21 @@ object SingleValueStatistics {
   }
 
   //If you want to predict only on httpSpanStream, make sure to filter SpanStream before handing over to this method
-  def anomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (Long, Long, Long, Long, Long, Long, Long, Long)]) = {
+  def anomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (Long, Long, Long, Long, Long, Long, Long, Long)], anomalyOutputTopic: String, kafkaServers: String,  printAnomaly: Boolean, writeToKafka: Boolean) = {
 
-    val labeledSpanDurationStream = StreamUtil.getLabeledSpanDurationStreamFromSpanStream(spanStream)
-
-    labeledSpanDurationStream.foreachRDD { rdd =>
+    
+    val fullInformationSpanDurationStream = StreamUtil.getFullInformationSpanDurationStreamFromSpanStream(spanStream)
+    fullInformationSpanDurationStream.foreachRDD { rdd =>
 
       rdd.foreach(x => {
-        val spanName = x._1
-        val spanId = x._2
+        val host = x._1
+        val span = x._2
         val duration = x._3
 
-        if (isAnomaly(spanName, duration, models)) {
-          reportAnomaly(spanId, spanName, duration)
+        if (isAnomaly(host, span, duration, models)){
+          reportAnomaly(host, span,anomalyOutputTopic, kafkaServers, printAnomaly, writeToKafka)
         } else {
-          println("no anomaly: " + spanName + " Duration: " + duration )
+          println("no anomaly: " + StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span) + " Duration: " + duration )
         }
       })
 
@@ -145,9 +145,10 @@ object SingleValueStatistics {
     println("Max: " + max)
   }
 
-  private def isAnomaly(spanName: String, duration: Long, models: Map[String, (Long, Long, Long, Long, Long, Long, Long, Long)]): Boolean = {
+  private def isAnomaly(host: Host, span: Span, duration: Long, models: Map[String, (Long, Long, Long, Long, Long, Long, Long, Long)]): Boolean = {
 
-    val model = models.get(spanName).getOrElse(null) //(min, max, avg, twentyfive, median, seventyfive, ninetyfive, ninetynine)
+    val endpointIdentifier= StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span)
+    val model = models.get(endpointIdentifier).getOrElse(null) //(min, max, avg, twentyfive, median, seventyfive, ninetyfive, ninetynine)
 
     if (model != null) {
       val ninetynine = model._8
@@ -157,8 +158,27 @@ object SingleValueStatistics {
     }
   }
 
-  private def reportAnomaly(id: Long, spanName: String, duration: Long) {
-    println("anomaly: " + spanName + ": Span " + id + " is an anomaly - Duration: " + duration )
+  private def reportAnomaly(host: Host, span: Span, anomalyOutputTopic: String, kafkaServers: String,  printAnomaly: Boolean, writeToKafka: Boolean) = {
+
+    val anomalyDescriptor = "splittedKMeans"
+    
+    val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
+      
+    if(printAnomaly){
+      println("anomaly: "+StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span))
+    }
+    
+    if(writeToKafka){
+      val props = new HashMap[String, Object]()
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+      "org.apache.kafka.common.serialization.StringSerializer")
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+      "org.apache.kafka.common.serialization.StringSerializer")
+    val producer = new KafkaProducer[String, String](props)
+
+    val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
+    }
   }
 
   private def getStatisticsForFilterList(vectorRdd: RDD[(String, Long)], filterRdd: RDD[String], sc: SparkContext) = {

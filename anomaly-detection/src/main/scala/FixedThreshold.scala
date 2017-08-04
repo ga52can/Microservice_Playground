@@ -31,14 +31,8 @@ object FixedThreshold {
   //Logger
   val rootLoggerLevel = Level.WARN
 
-  //General
-  val whitelistedStatusCodes = Array("200", "201")
 
-  //Kafka
-  val kafkaServers = "localhost:9092"
-  val defaultAnomalyOutputTopic = "thresholdAnomalies"
-
-  def monitorTagForFixedThreshold(spanStream: DStream[(Host, Span)], tagToMonitor: String, threshold: Double, tagShouldAlwaysBeAvailable: Boolean = false, writeToKafka: Boolean = false) = {
+  def monitorTagForFixedThreshold(spanStream: DStream[(Host, Span)], tagToMonitor: String, threshold: Double, tagShouldAlwaysBeAvailable: Boolean, anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
     val valueStream = spanStream.map(x => (x._1, x._2, x._2.tags().get(tagToMonitor)))
 
@@ -59,11 +53,10 @@ object FixedThreshold {
         val value = x._3.toDouble
         if (value > threshold) {
           
-          if (writeToKafka) {
-            reportAnomaly(value, threshold, tagToMonitor, x._2, x._1, true, true)
-          } else {
-            reportAnomaly(value, threshold, tagToMonitor, x._2, x._1, true, false)
-          }
+          
+            reportAnomaly(value, threshold, tagToMonitor, x._2, x._1,anomalyOutputTopic, kafkaServers, printAnomaly, writeToKafka)
+        
+          
         }
         }catch{
           case numberFormatException: java.lang.NumberFormatException => {println("NumberFormatException while trying to convert value of tag "+tagToMonitor)}
@@ -81,12 +74,12 @@ object FixedThreshold {
     Logger.getRootLogger.setLevel(rootLoggerLevel)
   }
 
-  private def reportAnomaly(value: Double, threshold: Double, tagToMonitor:String, span: Span, host: Host, printAnomaly: Boolean, writeToKafka: Boolean) = {
+  private def reportAnomaly(value: Double, threshold: Double, tagToMonitor:String, span: Span, host: Host, anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
-    val spanName = host.getServiceName + "-" + span.tags().get("http.method") + ":" + host.getAddress + ":" + host.getPort + span.getName
-    val traceId = span.getTraceId
-    val anomalyJSON = "{\"spanName\":\"" + spanName + "\", \"traceId\":\"" + traceId + "\", \"tag\":\"" + tagToMonitor + "\", \"value\":\"" + value + "\", \"threshold\":\"" + threshold + "\"}"
-
+    val anomalyDescriptor = "fixedThreshold-"+tagToMonitor
+    
+    val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
+      
     if(printAnomaly){
       println(anomalyJSON)
     }
@@ -100,7 +93,7 @@ object FixedThreshold {
       "org.apache.kafka.common.serialization.StringSerializer")
     val producer = new KafkaProducer[String, String](props)
 
-    val message = new ProducerRecord[String, String](defaultAnomalyOutputTopic, null, anomalyJSON)
+    val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
     }
     
 

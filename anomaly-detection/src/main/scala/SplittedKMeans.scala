@@ -47,6 +47,8 @@ object KafkaSplittedKMeans {
 
   //Logger
   val rootLoggerLevel = Level.WARN
+  
+
 
   /**
    * If you want to train only on httpSpanStream,
@@ -99,17 +101,18 @@ object KafkaSplittedKMeans {
   }
 
   //If you want to predict only on httpSpanStream, make sure to filter SpanStream before handing over to this method
-  def anomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (KMeansModel, Double, Double, Double, Double)]) = {
+  def anomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (KMeansModel, Double, Double, Double, Double)], anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
-    val labeledSpanDurationVectorStream = StreamUtil.getLabeledSpanDurationVectorStreamFromSpanStream(spanStream)
+    val fullInformationSpanDurationVectorStream = StreamUtil.getFullInformationSpanDurationVectorStreamFromSpanStream(spanStream)
 
-    labeledSpanDurationVectorStream.foreachRDD { rdd =>
+    fullInformationSpanDurationVectorStream.foreachRDD { rdd =>
 
+      //option to put the creation of the kafka message producer to be only created for each partition if performance would matter
       rdd.foreach(x => {
         if (isAnomaly(x, models)) {
-          reportAnomaly(x._2, x._1)
+          reportAnomaly(x._1, x._2, anomalyOutputTopic, kafkaServers, printAnomaly, writeToKafka)
         } else {
-          println("no anomaly: " + x._1)
+          println("no anomaly: " + StreamUtil.getEndpointIdentifierFromHostAndSpan(x._1, x._2))
         }
       })
 
@@ -118,15 +121,17 @@ object KafkaSplittedKMeans {
 
 
 
-  private def isAnomaly(dataPoint: (String, Long, Vector), models: Map[String, (KMeansModel, Double, Double, Double, Double)]): Boolean = {
-    val modelTuple = models.get(dataPoint._1).getOrElse(null)
+  private def isAnomaly(datapoint: (Host, Span, Vector), models: Map[String, (KMeansModel, Double, Double, Double, Double)]): Boolean = {
+    
+    val endpointIdentifier = StreamUtil.getEndpointIdentifierFromHostAndSpan(datapoint._1, datapoint._2)
+    val modelTuple = models.get(endpointIdentifier).getOrElse(null)
 
     if (modelTuple != null) {
       val model = modelTuple._1
       val threshold = modelTuple._2 //tuple: (model, ninetynine, median, avg, max) - of SQUAREDISTSANCE
       val centroid = model.clusterCenters(0) //only works as long as there is only one cluster
 
-      var distance = Vectors.sqdist(centroid, dataPoint._3)
+      var distance = Vectors.sqdist(centroid, datapoint._3)
 
       distance > threshold
     } else {
@@ -135,8 +140,28 @@ object KafkaSplittedKMeans {
 
   }
 
-  private def reportAnomaly(id: Long, spanName: String) {
-    println("anomaly: " + spanName + ": Span " + id + " is an anomaly")
+  
+  private def reportAnomaly(host: Host, span: Span, anomalyOutputTopic: String, kafkaServers: String,  printAnomaly: Boolean, writeToKafka: Boolean) = {
+
+    val anomalyDescriptor = "splittedKMeans"
+    
+    val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
+      
+    if(printAnomaly){
+      println("anomaly: "+StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span))
+    }
+    
+    if(writeToKafka){
+      val props = new HashMap[String, Object]()
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+      "org.apache.kafka.common.serialization.StringSerializer")
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+      "org.apache.kafka.common.serialization.StringSerializer")
+    val producer = new KafkaProducer[String, String](props)
+
+    val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
+    }
   }
 
   private def trainModelsForFilterList(vectorRdd: RDD[(String, Vector)], filterRdd: RDD[String], sc: SparkContext) = {

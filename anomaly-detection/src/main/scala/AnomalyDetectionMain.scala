@@ -57,7 +57,7 @@ object AnomalyDetectionMain {
   //Kafka
   val kafkaServers = "localhost:9092"
   val sleuthInputTopic = "sleuth"
-  val errorOutputTopic = "error"
+  val anomalyOutputTopic = "anomalies"
   //  val kafkaAutoOffsetReset = "earliest" //use "earliest" to read as much from queue as possible or "latest" to only get new values
 
   //Spark
@@ -81,72 +81,67 @@ object AnomalyDetectionMain {
     val trainingSsc = new StreamingContext(sparkConf, Seconds(batchInterval))
     val sparkContext = trainingSsc.sparkContext
 
-//    trainingSsc.checkpoint(checkpoint)
-//
-//    val trainingSpanStream = getSpanStreamFromKafka(trainingSsc, "earliest", "training")
-//
-//    val trainingHttpSpanStream = filterSpanStreamForHttpRequests(trainingSpanStream)
-//
-//    val splittedKMeansResult = KafkaSplittedKMeans.train(trainingSsc, trainingHttpSpanStream)
-//
-//    println("SplittedKmeans finished training")
+    trainingSsc.checkpoint(checkpoint)
+
+    val trainingSpanStream = StreamUtil.getSpanStreamFromKafka(trainingSsc, "earliest", "training", kafkaServers, sleuthInputTopic)
+
+    //    val trainingHttpSpanStream = filterSpanStreamForHttpRequests(trainingSpanStream)
+
+    val splittedKMeansResult = KafkaSplittedKMeans.train(trainingSsc, trainingSpanStream)
+
+    println("SplittedKmeans finished training")
     trainingSsc.stop(false, false)
-    
-    
-    val statisticsPredictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
-    val statisticsTrainingSpanStream = StreamUtil.getSpanStreamFromKafka(statisticsPredictionSsc, "earliest", "statisticstraining", kafkaServers, sleuthInputTopic)
-    val statisticsTrainingHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(statisticsTrainingSpanStream)
-    val singleValueStatisticsResult = SingleValueStatistics.train(statisticsPredictionSsc, statisticsTrainingHttpSpanStream)
 
-    statisticsPredictionSsc.stop(false, false)
-    println("SingleValueStatistics finished training")
+    //    val statisticsPredictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
+    //    val statisticsTrainingSpanStream = StreamUtil.getSpanStreamFromKafka(statisticsPredictionSsc, "earliest", "statisticstraining", kafkaServers, sleuthInputTopic)
+    //    val statisticsTrainingHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(statisticsTrainingSpanStream)
+    //    val singleValueStatisticsResult = SingleValueStatistics.train(statisticsPredictionSsc, statisticsTrainingHttpSpanStream)
 
-//    println("-----------------------------------------------------")
-//    println("-------------------SplittedKMeans--------------------")
-//    println("-----------------------------------------------------")
-//    for (resultLine <- splittedKMeansResult) {
-//
-//      printResultLine(resultLine)
-//    }
+    //    statisticsPredictionSsc.stop(false, false)
+    //    println("SingleValueStatistics finished training")
 
     println("-----------------------------------------------------")
-    println("----------------SingleValueStatistics----------------")
+    println("-------------------SplittedKMeans--------------------")
     println("-----------------------------------------------------")
-    for (resultLine <- singleValueStatisticsResult) {
-      val statistics = resultLine._2
+    for (resultLine <- splittedKMeansResult) {
 
-      printSingleValueStatistics(resultLine._1, statistics._1, statistics._2, statistics._3, statistics._4, statistics._5, statistics._6, statistics._7, statistics._8)
-
+      printResultLine(resultLine)
     }
+
+    //    println("-----------------------------------------------------")
+    //    println("----------------SingleValueStatistics----------------")
+    //    println("-----------------------------------------------------")
+    //    for (resultLine <- singleValueStatisticsResult) {
+    //      val statistics = resultLine._2
+    //
+    //      printSingleValueStatistics(resultLine._1, statistics._1, statistics._2, statistics._3, statistics._4, statistics._5, statistics._6, statistics._7, statistics._8)
+    //
+    //    }
 
     val predictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
     predictionSsc.checkpoint("pred-checkpoint")
 
-//    val splittedKMeansModels = splittedKMeansResult.toMap
+    val splittedKMeansModels = splittedKMeansResult.toMap
 
-    val singleValueStatisticsModels = singleValueStatisticsResult.toMap
+    //    val singleValueStatisticsModels = singleValueStatisticsResult.toMap
 
     val predictionSpanStream = StreamUtil.getSpanStreamFromKafka(predictionSsc, "latest", "prediction", kafkaServers, sleuthInputTopic)
 
-    val predictionHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(predictionSpanStream)
+    //    val predictionHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(predictionSpanStream)
 
-    //    ErrorDetection.errorDetection(predictionSpanStream, false) //do not write to Kafka - just print errors
+    //        ErrorDetection.errorDetection(predictionSpanStream, anomalyOutputTopic, kafkaServers, true, false) //do not write to Kafka - just print errors
 
-    //    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilization", 99, true, false)
+    //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilization", 99, true, anomalyOutputTopic, kafkaServers, true, false)
 
-    //    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, true, false)
+    //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, true, anomalyOutputTopic, kafkaServers, true,  false)
 
-    //    KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionHttpSpanStream, splittedKMeansModels)
+    KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, false)
 
-    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels)
+//    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels, anomalyOutputTopic, kafkaServers, true, false)
 
     predictionSsc.start()
     predictionSsc.awaitTermination()
   }
-
-
-
-
 
   private def printResultLine(resultLine: (String, (KMeansModel, Double, Double, Double, Double))) = {
 
@@ -170,8 +165,6 @@ object AnomalyDetectionMain {
     println("Max: " + max)
   }
 
-
-
   private def printSingleValueStatistics(endpointName: String, min: Long, max: Long, avg: Long, twentyfive: Long, median: Long, seventyfive: Long, ninetyfive: Long, ninetynine: Long) = {
 
     println("----Statistics for: " + endpointName + "----")
@@ -185,8 +178,6 @@ object AnomalyDetectionMain {
     println("95% percentile: " + ninetyfive)
     println("99% percentile: " + ninetynine)
   }
-
-
 
 }
 
