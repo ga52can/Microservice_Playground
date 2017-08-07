@@ -64,7 +64,7 @@ object AnomalyDetectionMain {
   val sparkAppName = "KafkaKMeans"
   val sparkMaster = "local[4]"
   val sparkLocalDir = "C:/tmp"
-  val batchInterval = 5
+  val batchInterval = 1
   val checkpoint = "checkpoint"
 
   //global fields
@@ -73,6 +73,7 @@ object AnomalyDetectionMain {
     val sparkConf = new SparkConf().setAppName(sparkAppName).setMaster(sparkMaster)
       .set("spark.local.dir", sparkLocalDir)
       .set("spark.driver.allowMultipleContexts", "true")
+      .set("spark.kryoserializer.buffer.max", "1024m")
 
     sparkConf.registerKryoClasses(Array(classOf[Span]))
     sparkConf.registerKryoClasses(Array(classOf[Spans]))
@@ -119,7 +120,7 @@ object AnomalyDetectionMain {
     //    }
 
     val predictionSsc = new StreamingContext(sparkContext, Seconds(batchInterval))
-    predictionSsc.checkpoint("pred-checkpoint")
+    predictionSsc.checkpoint(".")
 
     val splittedKMeansModels = splittedKMeansResult.toMap
 
@@ -129,16 +130,19 @@ object AnomalyDetectionMain {
 
     //    val predictionHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(predictionSpanStream)
 
-    //        ErrorDetection.errorDetection(predictionSpanStream, anomalyOutputTopic, kafkaServers, true, false) //do not write to Kafka - just print errors
+    ErrorDetection.errorDetection(predictionSpanStream, anomalyOutputTopic, kafkaServers, true, false) //true false -> do not write to Kafka - just print errors
 
-    //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilization", 99, true, anomalyOutputTopic, kafkaServers, true, false)
+    //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilizationAvgLastMinute", 80, true, anomalyOutputTopic, kafkaServers, true, false)
 
     //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, true, anomalyOutputTopic, kafkaServers, true,  false)
 
-    KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, false)
+        KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, false)
 
-//    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels, anomalyOutputTopic, kafkaServers, true, false)
+    //    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels, anomalyOutputTopic, kafkaServers, true, false)
 
+    println("-----------------------------------------------------")
+    println("----------Starting to Monitor Application------------")
+    println("-----------------------------------------------------")
     predictionSsc.start()
     predictionSsc.awaitTermination()
   }

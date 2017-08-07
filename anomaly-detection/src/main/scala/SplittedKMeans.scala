@@ -38,6 +38,9 @@ import org.apache.spark.streaming.kafka010.KafkaRDD
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.spark.streaming.StateSpec
 import org.apache.spark.streaming.State
+import org.apache.spark.broadcast.Broadcast
+import scala.collection.mutable.ListBuffer
+import org.apache.spark.mllib.stat.Statistics
 
 object KafkaSplittedKMeans {
 
@@ -47,8 +50,6 @@ object KafkaSplittedKMeans {
 
   //Logger
   val rootLoggerLevel = Level.WARN
-  
-
 
   /**
    * If you want to train only on httpSpanStream,
@@ -61,25 +62,39 @@ object KafkaSplittedKMeans {
 
     var filterRdd = ssc.sparkContext.emptyRDD[String]
 
-    var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
-    
+    //    var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
+
+    var kMeansInformationRdd = ssc.sparkContext.emptyRDD[(String, Long, Long, Long, Double)] //identifier for splitting, begin(yyyy/MM/dd-HH:mm), duration
+
     val spanNameStream = StreamUtil.getSpanNameStreamFromSpanStream(spanStream)
-    
+
     //fill the filterRdd with a distinct list of all spanNames that appear in spanNameStream
     spanNameStream.foreachRDD(rdd => {
       filterRdd = filterRdd.union(rdd).distinct()
     })
 
-    val spanDurationVectorStream = StreamUtil.getSpanDurationVectorStreamFromSpanStream(spanStream)
+    val kMeansInformationStream = StreamUtil.getkMeansInformationStream(spanStream)
 
-    spanDurationVectorStream.foreachRDD { rdd =>
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis())+" : Starting extracting kMeansInformationStream to RDD")
+    kMeansInformationStream.foreachRDD { rdd =>
+//      println(rdd.count())
       if (rdd.count() == 0) {
         flag = 1
       }
-      println(rdd.count())
-      vectorRdd = vectorRdd.union(rdd)
+      kMeansInformationRdd = kMeansInformationRdd.union(rdd)
 
     }
+
+    //    val spanDurationVectorStream = StreamUtil.getSpanDurationVectorStreamFromSpanStream(spanStream)
+
+    //    spanDurationVectorStream.foreachRDD { rdd =>
+    //      if (rdd.count() == 0) {
+    //        flag = 1
+    //      }
+    //      println(rdd.count())
+    //      vectorRdd = vectorRdd.union(rdd)
+    //
+    //    }
 
     Logger.getRootLogger.setLevel(rootLoggerLevel)
     ssc.start()
@@ -88,12 +103,76 @@ object KafkaSplittedKMeans {
       //      println("flag: " + flag)
       Thread.sleep(1000)
     }
+
+    
     val sc = ssc.sparkContext
-    println("left loop")
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis())+" : Finished extracting kMeansInformationStream to RDD")
+    kMeansInformationRdd = kMeansInformationRdd.cache()
+
+    
+    
+    
+    
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis())+" : Entering rpm calculation")
+    kMeansInformationRdd.sortBy(_._2, true)
+
+    var kMeansFeatureListBuffer: ListBuffer[(String, Long, Long, Long, Double)] = ListBuffer()
+    var buffer: collection.mutable.Map[String, Array[Long]] = collection.mutable.Map()
+
+
+    
+    //this part is decreasing in performance the higher the amount of requests per the defined time interval is
+    kMeansInformationRdd.collect.foreach(x => {
+      val ts = x._2
+      val identifier = x._1 //make sure the identifier represents actually the entity that receives the traffic -e.g. machine (IP?) not only endpoint
+
+      //      val identifier = "system"
+      var bufferInstance = buffer.get(identifier).getOrElse(Array[Long]())
+
+      bufferInstance = bufferInstance ++ Array(ts)
+
+      bufferInstance = bufferInstance.filter(p => p > ts - 6000)
+
+      buffer.put(identifier, bufferInstance)
+
+      val rpm = bufferInstance.size.toLong
+
+      kMeansFeatureListBuffer.append((identifier, x._3, rpm, x._4, x._5)) //identifier, duration, rpm, memory, cpu
+
+
+    })
+
+    val kMeansFeatureRdd = sc.parallelize(kMeansFeatureListBuffer)
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis())+" : Finished rpm calculation")
+
+    val stat = Statistics.colStats(kMeansFeatureRdd.map(x => Vectors.dense(x._2, x._3, x._4, x._5)))
+    
+    
+    
+    println("Max: "+stat.max.toJson)
+    println("Min: "+stat.min.toJson)
+    println("Mean: "+stat.mean.toJson)
+    println("Variance: "+stat.variance.toJson)
+    println("NormL1: "+stat.normL1.toJson)
+    println("NormL1: "+stat.normL2.toJson)
+    
+    println("kMeansFeatureRdd Count: " + kMeansFeatureRdd.count())
+
+    kMeansInformationRdd.unpersist(true)
+
+    //    val kMeansFeatureVectorRdd = kMeansFeatureRdd.map(x => (x._1, Vectors.dense(x._2, x._3)))
+
+    
+    
+    val vectorRdd = kMeansFeatureRdd.map(x => (x._1, Vectors.dense(x._2, x._3, x._4, x._5)))
     vectorRdd.cache()
 
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis())+" : Starting to train SplittedKMeansModel")
+    
     val modelSet = trainModelsForFilterList(vectorRdd, filterRdd, sc)
 
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis())+" : Finished Training SplittedKMeansModel")
+    
     vectorRdd.unpersist(true)
 
     modelSet
@@ -103,35 +182,54 @@ object KafkaSplittedKMeans {
   //If you want to predict only on httpSpanStream, make sure to filter SpanStream before handing over to this method
   def anomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (KMeansModel, Double, Double, Double, Double)], anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
-    val fullInformationSpanDurationVectorStream = StreamUtil.getFullInformationSpanDurationVectorStreamFromSpanStream(spanStream)
+    
+    var rpmMap: collection.mutable.Map[String, Long] = collection.mutable.Map()
 
-    fullInformationSpanDurationVectorStream.foreachRDD { rdd =>
+//    val fullInformationSpanDurationVectorStream = StreamUtil.getFullInformationSpanDurationVectorStreamFromSpanStream(spanStream)
+    val spanNameStream = StreamUtil.getSpanNameStreamFromSpanStream(spanStream)
+
+    val requestsPerMinute = spanNameStream.countByValueAndWindow(Seconds(1), Seconds(1)).foreachRDD(rdd => {
+
+      val collectedRdd = rdd.collect()
+      if (collectedRdd.size > 0) {
+        for (rpmEntry <- collectedRdd) {
+          rpmMap.put(rpmEntry._1, rpmEntry._2)
+        }
+
+      }
+
+    })
+
+    spanStream.foreachRDD { rdd =>
 
       //option to put the creation of the kafka message producer to be only created for each partition if performance would matter
       rdd.foreach(x => {
-        if (isAnomaly(x, models)) {
+
+        if (isAnomaly(x, models, rpmMap)) {
           reportAnomaly(x._1, x._2, anomalyOutputTopic, kafkaServers, printAnomaly, writeToKafka)
-        } else {
-          println("no anomaly: " + StreamUtil.getEndpointIdentifierFromHostAndSpan(x._1, x._2))
-        }
+       } //else {
+//          val identifier = StreamUtil.getEndpointIdentifierFromHostAndSpan(x._1, x._2)
+//          println("no anomaly: " + identifier + " rpm: " + rpmMap.get(identifier).getOrElse(0))
+//        }
       })
 
     }
   }
 
+  private def isAnomaly(datapoint: (Host, Span), models: Map[String, (KMeansModel, Double, Double, Double, Double)], rpmMap:collection.mutable.Map[String, Long] ): Boolean = {
 
-
-  private def isAnomaly(datapoint: (Host, Span, Vector), models: Map[String, (KMeansModel, Double, Double, Double, Double)]): Boolean = {
-    
-    val endpointIdentifier = StreamUtil.getEndpointIdentifierFromHostAndSpan(datapoint._1, datapoint._2)
+    val span = datapoint._2
+    val host = datapoint._1
+    val endpointIdentifier = StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span)
     val modelTuple = models.get(endpointIdentifier).getOrElse(null)
+    val vector = Vectors.dense(span.getAccumulatedMicros.toDouble, rpmMap.getOrElse(endpointIdentifier, 0L).toDouble, span.tags().getOrDefault("jvm.memoryUtilization", "0").toDouble, span.tags().getOrDefault("cpu.system.utilizationAvgLastMinute", "0").toDouble)
 
     if (modelTuple != null) {
       val model = modelTuple._1
       val threshold = modelTuple._2 //tuple: (model, ninetynine, median, avg, max) - of SQUAREDISTSANCE
       val centroid = model.clusterCenters(0) //only works as long as there is only one cluster
 
-      var distance = Vectors.sqdist(centroid, datapoint._3)
+      var distance = Vectors.sqdist(centroid, vector)
 
       distance > threshold
     } else {
@@ -140,27 +238,26 @@ object KafkaSplittedKMeans {
 
   }
 
-  
-  private def reportAnomaly(host: Host, span: Span, anomalyOutputTopic: String, kafkaServers: String,  printAnomaly: Boolean, writeToKafka: Boolean) = {
+  private def reportAnomaly(host: Host, span: Span, anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
     val anomalyDescriptor = "splittedKMeans"
-    
-    val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
-      
-    if(printAnomaly){
-      println("anomaly: "+StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span))
-    }
-    
-    if(writeToKafka){
-      val props = new HashMap[String, Object]()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
-    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-      "org.apache.kafka.common.serialization.StringSerializer")
-    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-      "org.apache.kafka.common.serialization.StringSerializer")
-    val producer = new KafkaProducer[String, String](props)
 
-    val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
+    val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
+
+    if (printAnomaly) {
+      println("anomaly: " + StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span))
+    }
+
+    if (writeToKafka) {
+      val props = new HashMap[String, Object]()
+      props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
+      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+        "org.apache.kafka.common.serialization.StringSerializer")
+      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+        "org.apache.kafka.common.serialization.StringSerializer")
+      val producer = new KafkaProducer[String, String](props)
+
+      val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
     }
   }
 
@@ -221,9 +318,6 @@ object KafkaSplittedKMeans {
     //     val predictor = (model, ninetynine, median, avg, max)
     modelAndStatistics(rdd999, model999)
   }
-
-
-
 
   private def printStatistics(vectorRdd: RDD[Vector], model: KMeansModel, modelDescription: String) = {
 

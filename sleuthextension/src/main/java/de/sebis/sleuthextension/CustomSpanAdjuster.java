@@ -17,8 +17,11 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 	@Override
 	public Span adjust(Span span) {
 
+		;
+		
 		try {
-			span.tag("cpu.system.utilization", Double.toString(getSystemCpuLoad()));
+//			span.tag("cpu.system.utilization", Double.toString(getSystemCpuLoad()));
+			span.tag("cpu.system.utilizationAvgLastMinute", Double.toString(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage()));
 		} catch (Exception e) {
 			span.tag("cpu.system.utilization", e.getMessage());
 			System.out.println("Issue while trying to access cpu utilization information");
@@ -39,7 +42,6 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 		span.tag("jvm.totalMemory.mb", totalMemory+"");
 		span.tag("jvm.freeMemory.mb", freeMemory+"");
 		span.tag("jvm.maxMemory.mb", maxMemory+"");
-		System.out.println(memoryUtilization);
 		span.tag("jvm.memoryUtilization", memoryUtilization+"");
 
 		return span;
@@ -48,23 +50,23 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 
 
 
-	public static double getSystemCpuLoad() throws Exception {
-
-		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-		ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
-		AttributeList list = mbs.getAttributes(name, new String[] { "SystemCpuLoad" });
-
-		if (list.isEmpty())
-			return Double.NaN;
-
-		Attribute att = (Attribute) list.get(0);
-		Double value = (Double) att.getValue();
-
-		// usually takes a couple of seconds before we get real values
-		if (value == -1.0)
-			return Double.NaN;
-		// returns a percentage value with 1 decimal point precision
-		return ((int) (value * 1000) / 10.0);
-	}
+//	public static double getSystemCpuLoad() throws Exception {
+//
+//		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+//		ObjectName name = ObjectName.getInstance("java.lang:type=OperatingSystem");
+//		AttributeList list = mbs.getAttributes(name, new String[] { "SystemCpuLoad" });
+//
+//		if (list.isEmpty())
+//			return Double.NaN;
+//
+//		Attribute att = (Attribute) list.get(0);
+//		Double value = (Double) att.getValue();
+//
+//		// usually takes a couple of seconds before we get real values
+//		if (value == -1.0)
+//			return Double.NaN;
+//		// returns a percentage value with 1 decimal point precision
+//		return ((int) (value * 1000) / 10.0);
+//	}
 
 }

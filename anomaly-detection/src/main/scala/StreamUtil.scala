@@ -27,6 +27,9 @@ import org.apache.spark.rdd.RDD
 import scala.collection.mutable.Map
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.linalg.Vector
+import org.joda.time.{ DateTimeZone }
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.DateTime
 
 object StreamUtil {
 
@@ -45,6 +48,16 @@ object StreamUtil {
     val errorJSON = "{\"endpointIdentifier\":\"" + endpointIdentifier + "\", \"spanId\":\"" + spanId + "\", \"traceId\":\"" + traceId + "\", \"begin\":\"" + begin + "\", \"end\":\"" + end + "\"}"
     errorJSON
 
+  }
+
+  def unixMilliToDateTimeStringMilliseconds(unixMillis: Long): String = {
+    val dateString = new DateTime(unixMillis).toDateTime.toString("yyyy/MM/dd-HH:mm:ss.SSS")
+    dateString
+  }
+  
+    def unixMilliToDateTimeStringMinutes(unixMillis: Long): String = {
+    val dateString = new DateTime(unixMillis).toDateTime.toString("yyyy/MM/dd-HH:mm")
+    dateString
   }
 
   /**
@@ -92,6 +105,11 @@ object StreamUtil {
 
     spanStream
 
+  }
+
+  def getkMeansInformationStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Long, Long, Double)] = {
+    val kMeansInformationStream = spanStream.map(x => (getEndpointIdentifierFromHostAndSpan(x._1, x._2), x._2.getBegin, x._2.getAccumulatedMicros, x._2.tags().getOrDefault("jvm.memoryUtilization", "0").toLong, x._2.tags().getOrDefault("cpu.system.utilizationAvgLastMinute", "0").toDouble))
+    kMeansInformationStream
   }
 
   def getSpanDurationStreamFromSpanStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long)] = {
