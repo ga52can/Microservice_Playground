@@ -72,6 +72,7 @@ object AnomalyDetectionMain {
 
     val sparkConf = new SparkConf().setAppName(sparkAppName).setMaster(sparkMaster)
       .set("spark.local.dir", sparkLocalDir)
+      .set("spark.driver.host","localhost")
       .set("spark.driver.allowMultipleContexts", "true")
       .set("spark.kryoserializer.buffer.max", "1024m")
 
@@ -136,7 +137,7 @@ object AnomalyDetectionMain {
 
     //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, true, anomalyOutputTopic, kafkaServers, true,  false)
 
-        KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, false)
+        KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, true)
 
     //    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels, anomalyOutputTopic, kafkaServers, true, false)
 
@@ -147,7 +148,7 @@ object AnomalyDetectionMain {
     predictionSsc.awaitTermination()
   }
 
-  private def printResultLine(resultLine: (String, (KMeansModel, Double, Double, Double, Double))) = {
+  private def printResultLine(resultLine: (String, (KMeansModel, Double, Double, Double, Double, Array[Double]))) = {
 
     val result = resultLine._2
     val spanName = resultLine._1
@@ -157,6 +158,7 @@ object AnomalyDetectionMain {
     val median = Math.sqrt(result._3)
     val avg = Math.sqrt(result._4)
     val max = Math.sqrt(result._5)
+    val durationDivisor = result._5
 
     println("----Results for " + spanName + "----")
     for (i <- 0 until model.clusterCenters.length) {
@@ -167,7 +169,8 @@ object AnomalyDetectionMain {
     println("Median: " + median)
     println("Average: " + avg)
     println("Max: " + max)
-  }
+    println("Duration scaling divisor: "+durationDivisor)
+   }
 
   private def printSingleValueStatistics(endpointName: String, min: Long, max: Long, avg: Long, twentyfive: Long, median: Long, seventyfive: Long, ninetyfive: Long, ninetynine: Long) = {
 

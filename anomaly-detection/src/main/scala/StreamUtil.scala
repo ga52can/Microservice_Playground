@@ -34,18 +34,32 @@ import org.joda.time.DateTime
 object StreamUtil {
 
   def getEndpointIdentifierFromHostAndSpan(host: Host, span: Span): String = {
-    var identifier = host.getServiceName + "-" + span.tags().get("http.method") + ":" + host.getAddress + ":" + host.getPort + span.getName
+    //    This identifier includes IP
+    //    var identifier = host.getServiceName + "@" + host.getAddress  +  ":" + host.getPort + span.getName.substring(5) + ":::" +span.tags().getOrDefault("http.method", span.tags().get("mvc.controller.class")+span.tags().getOrDefault("mvc.controller.method", ""))
+    //    Use this identifier when local generated test set was generated in different network or played with in different networs- ignores ip
+    var identifier = host.getServiceName + "@ignoredIP:" + host.getPort + span.getName.substring(5) + ":::" + span.tags().getOrDefault("http.method", span.tags().get("mvc.controller.class") + span.tags().getOrDefault("mvc.controller.method", ""))
+
     identifier
   }
 
   def generateAnomalyJSON(host: Host, span: Span, anomalyDescriptor: String): String = {
     val endpointIdentifier = getEndpointIdentifierFromHostAndSpan(host, span)
-    val spanId = span.getSpanId
-    val traceId = span.getTraceId
+    var spanId = span.getSpanId.toString
+    //in an rpc case there are two spans with the same ID - one with http annotations and the other with mvc annotations
+    //this if clause makes sure the IDs of those spans are unique once we get to root cause analysis
+    //as all SpanIds seem to have 19 digits (plus an additional negative sign in some cases) * 1000 seems a good way to make them
+    //unique and keep them as long
+    if(span.tags().get("mvc.controller.class")!=null){
+      spanId = "mvc"+spanId
+    }
+    val traceId = span.getTraceId.toString
     val begin = span.getBegin
     val end = span.getEnd
-
-    val errorJSON = "{\"endpointIdentifier\":\"" + endpointIdentifier + "\", \"spanId\":\"" + spanId + "\", \"traceId\":\"" + traceId + "\", \"begin\":\"" + begin + "\", \"end\":\"" + end + "\"}"
+    var parentId = 0L
+    if(span.getParents.size()>0){
+      parentId = span.getParents.get(0)
+    }
+    val errorJSON = "{\"endpointIdentifier\":\"" + endpointIdentifier + "\", \"spanId\":\"" + spanId + "\", \"traceId\":\"" + traceId + "\", \"anomalyDescriptor\":\"" + anomalyDescriptor + "\", \"begin\":\"" + begin + "\", \"end\":\"" + end + "\", \"parentId\":\"" + parentId + "\"}"
     errorJSON
 
   }
@@ -54,8 +68,8 @@ object StreamUtil {
     val dateString = new DateTime(unixMillis).toDateTime.toString("yyyy/MM/dd-HH:mm:ss.SSS")
     dateString
   }
-  
-    def unixMilliToDateTimeStringMinutes(unixMillis: Long): String = {
+
+  def unixMilliToDateTimeStringMinutes(unixMillis: Long): String = {
     val dateString = new DateTime(unixMillis).toDateTime.toString("yyyy/MM/dd-HH:mm")
     dateString
   }
@@ -92,10 +106,6 @@ object StreamUtil {
 
       })
 
-    //Stream that maps the each Spans object as a Tuple of ServiceName and a List of its associated Spans
-    val serviceStream = spansStream.map(x => (x.getHost.getServiceName, x.getSpans.asScala)).groupByKey()
-    //      serviceStream.print(25)
-
     //Stream of all Spans that come from Kafka
     val spanStream = spansStream.flatMap(x => {
       var buffer = ArrayBuffer[(Host, Span)]()
@@ -105,6 +115,65 @@ object StreamUtil {
 
     spanStream
 
+  }
+
+  def getAnomalyStreamFromKafka(ssc: StreamingContext, autoOffsetReset: String, groupId: String, kafkaServers: String, anomalyTopic: String): DStream[(String, String, Long, Long, String, String, String)] = {
+
+    val kafkaParams = Map[String, Object](
+      "bootstrap.servers" -> kafkaServers,
+      "key.deserializer" -> classOf[StringDeserializer],
+      "value.deserializer" -> classOf[StringDeserializer],
+      "group.id" -> groupId,
+      "auto.offset.reset" -> autoOffsetReset,
+      "enable.auto.commit" -> (false: java.lang.Boolean))
+
+    val topics = Array(anomalyTopic)
+
+    val anomalyJson = KafkaUtils.createDirectStream[String, String](ssc, PreferConsistent, Subscribe[String, String](topics, kafkaParams)).map(_.value())
+    //    {"endpointIdentifier":"endpointIdentifier", "spanId":"spanId", "traceId":"traceId", "anomalyDescriptor":"anomalyDescriptor","begin":"begin", "end":"end"}
+
+    val anomalyStream = anomalyJson.map(x => {
+      val jsonObject = JSON.parseFull(x)
+      val anomalyMap = jsonObject.get.asInstanceOf[collection.immutable.Map[String, Any]]
+      val endpointIdentifier = anomalyMap.get("endpointIdentifier").get.asInstanceOf[String]
+      val spanId = anomalyMap.get("spanId").get.asInstanceOf[String]
+      val traceId = anomalyMap.get("traceId").get.asInstanceOf[String]
+      val anomalyDescriptor = anomalyMap.get("anomalyDescriptor").get.asInstanceOf[String]
+      val begin = anomalyMap.get("begin").get.asInstanceOf[String].toLong
+      val end = anomalyMap.get("end").get.asInstanceOf[String].toLong
+      val parentId = anomalyMap.get("parentId").get.asInstanceOf[String]
+
+      (spanId, traceId, begin, end, endpointIdentifier, anomalyDescriptor, parentId)
+
+    })
+
+    anomalyStream
+
+  }
+
+  def combineAnomaliesBySpanId(anomalyStream: DStream[(String, String, Long, Long, String, String, String)]): DStream[(String, String, Long, Long, String, String, String)] = {
+
+    val aggregatedStream = anomalyStream.map(x => (x._1, (x._1, x._2, x._3, x._4, x._5, x._6, x._7))).reduceByKey((x, y) => (x._1, x._2, x._3, x._4, x._5, x._6 + ", " + y._6, x._7))
+    aggregatedStream.map(x => x._2)
+  }
+
+  def getAnomaliesAggregatedByTraceId(anomalyTupleStream: DStream[(String, String, Long, Long, String, String, String)]): DStream[Anomaly]={
+
+    val groupedStream = anomalyTupleStream.map(x => (x._2, (x._1, x._2, x._3, x._4, x._5, x._6,x._7))).groupByKey()
+    val anomalyStream = groupedStream.map(x => {
+      //(spanId, traceId, begin, end, endpointIdentifier, anomalyDescriptor)
+      var anomalyList = x._2.toList.sortBy(x => (x._3, x._4))
+      var anomaly: Anomaly = null
+      for(anomalyTuple <- anomalyList){
+        if(anomaly==null){
+          anomaly = new Anomaly(anomalyTuple._1, anomalyTuple._2, anomalyTuple._3, anomalyTuple._4, anomalyTuple._5, anomalyTuple._6, anomalyTuple._7)
+        }else{
+          anomaly.insert(new Anomaly(anomalyTuple._1, anomalyTuple._2, anomalyTuple._3, anomalyTuple._4, anomalyTuple._5, anomalyTuple._6, anomalyTuple._7))
+        }
+      }
+      anomaly
+    })
+    anomalyStream
   }
 
   def getkMeansInformationStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Long, Long, Double)] = {

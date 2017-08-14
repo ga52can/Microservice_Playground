@@ -94,6 +94,7 @@ object FixedThreshold {
     val producer = new KafkaProducer[String, String](props)
 
     val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
+    producer.send(message)
     }
     
 
