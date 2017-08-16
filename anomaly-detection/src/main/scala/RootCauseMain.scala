@@ -65,7 +65,7 @@ object RootCauseMain {
   val sparkMaster = "local[4]"
   val sparkLocalDir = "C:/tmp"
   val batchInterval = 5
-  val checkpoint = "checkpoint"
+  val checkpoint = "root"
 
   //global fields
   def main(args: Array[String]) {
@@ -91,7 +91,7 @@ object RootCauseMain {
     ssc.checkpoint(checkpoint)
     Logger.getRootLogger.setLevel(rootLoggerLevel)
 
-    val anomalyStream = StreamUtil.getAnomalyStreamFromKafka(ssc, "earliest", "rca4", kafkaServers, anomalyOutputTopic)
+    val anomalyStream = StreamUtil.getAnomalyStreamFromKafka(ssc, "earliest", "rca5", kafkaServers, anomalyOutputTopic)
     anomalyStream.count().print()
 
     //find spans with the same SpanId and combine their errorMessage to handle them as one Span thereafter
@@ -122,12 +122,12 @@ object RootCauseMain {
         
 
         partition.foreach(x => {
-          val leaves = x.getLeaves()
+          val leaves = x.getRootCauses()
           for (anomaly <- leaves) {
-            println("-------------------\nanomaly: " + anomaly.endpointIdentifier + "\ncalledBy: " + anomaly.printCalling() + "\n-------------------")
+            println("-------------------\nanomaly: " + anomaly.endpointIdentifier + "\ncalledBy: " + anomaly.printWarnings() + "\n-------------------")
             if(connection!=null){
             val statement = connection.createStatement()
-            val query= "INSERT INTO anomalies.anomalies (endpoint, information) VALUES ('" + anomaly.endpointIdentifier + "','" + anomaly.printCallingSQL() + "');"
+            val query= "INSERT INTO anomalies.anomalies (endpoint, warnings, information, traceid) VALUES ('" + anomaly.endpointIdentifier + "','" + anomaly.printWarningSQL() + "','" + anomaly.errorDescriptor + "','" + anomaly.TraceId + "');"
             statement.executeUpdate(query)
             
             println("Exdecuted:" +query)

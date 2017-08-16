@@ -7,8 +7,19 @@ public class Travel {
 
     private int origin;
     private int destination;
+    private String info = "";
 
-    public int getOrigin() {
+    
+    
+    public String getInfo() {
+		return info;
+	}
+
+	public void setInfo(String info) {
+		this.info = info;
+	}
+
+	public int getOrigin() {
         return origin;
     }
 

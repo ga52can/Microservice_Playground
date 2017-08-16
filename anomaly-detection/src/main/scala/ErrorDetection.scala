@@ -53,10 +53,30 @@ object ErrorDetection {
     Logger.getRootLogger.setLevel(rootLoggerLevel)
   }
 
+  /**
+   * This filter is specifically designed for the error reporting behaviour of
+   * spring cloud sleuth
+   */
   private def errorFilter(input: (Host, Span, Map[String, String])) = {
     val status_code = input._3.get("http.status_code").getOrElse("").asInstanceOf[String]
     //filter out every Span that has a white listed status code and no error tag set
-    if ((status_code.isEmpty() || whitelistedStatusCodes.contains(status_code)) && input._2.tags().get("error") == null) false
+    if ((status_code.isEmpty() || whitelistedStatusCodes.contains(status_code)) && input._2.tags().get("error") == null) 
+      false
+    //A span with status code 404 is (at least in this setup) only issued in the case of a call of a not existing page
+    //This means it should usually only be a problem that is caused by a user entering a wrong ur
+    //If (in this demo setup) an internally called service is not available a 500 +  error message is issued
+    else if(status_code.equals("404"))
+        false
+    //only return the 500er spans that actually do have an error message - the error message is set to the first span
+    //where it appeared, while the whole stack back to the root will also have 500er spans but without error message
+    //by removing all 500er spans without error set we get rid of those
+    else if(status_code.equals("500") && input._3.getOrElse("error", "not set").equals("not set"))
+      false
+      
+    //only return the 400er spans that actually do have an error message - the error message is set to the first span where the error happened
+    else if(status_code.equals("400") && input._3.getOrElse("error", "not set").equals("not set"))
+      false
+    
     else true
   }
 
@@ -80,8 +100,11 @@ object ErrorDetection {
                 val host = x._1
                 val span = x._2
                 val tagMap = x._3
+                val httpStatusCode = tagMap.getOrElse("http.status_code", "").asInstanceOf[String];
+                val errorMessage = tagMap.getOrElse("error", "not set")
 
-                val anomalyJson = StreamUtil.generateAnomalyJSON(host, span, "errorDetector")
+                val errorCode = "errorDetector:" + httpStatusCode +errorMessage
+                val anomalyJson = StreamUtil.generateAnomalyJSON(host, span, errorCode)
                 val message = new ProducerRecord[String, String](errorOutputTopic, null, anomalyJson)
                 if (writeToKafka) {
                   producer.send(message)
@@ -105,12 +128,12 @@ object ErrorDetection {
                 val span = x._2
                 val tagMap = x._3
 
-                val hostString = host.getServiceName + "@" + host.getAddress + ":" + host.getPort
-                val spanName = x._1.getServiceName + "-" + x._2.tags().get("http.method") + ":" + x._1.getAddress + ":" + x._1.getPort + x._2.getName
+                val endpoint = StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span)
+                
                 val traceId = span.getTraceId
-                val httpStatusCode = tagMap.getOrElse("http.status_code", "").asInstanceOf[String];
+                val httpStatusCode = tagMap.getOrElse("http.status_code", "not set").asInstanceOf[String];
                 val errorMessage = tagMap.getOrElse("error", "not set")
-                val errorJSON = "{\"host\":\"" + hostString + "\", \"spanName\":\"" + spanName + "\", \"traceId\":\"" + traceId + "\", \"status_code\":\"" + httpStatusCode + "\", \"errorMessage\":\"" + errorMessage + "\"}"
+                val errorJSON = "{\", \"endpoint\":\"" + endpoint + "\", \"traceId\":\"" + traceId + "\", \"status_code\":\"" + httpStatusCode + "\", \"errorMessage\":\"" + errorMessage + "\"}"
                 println("Error: " + errorJSON)
               }
           }

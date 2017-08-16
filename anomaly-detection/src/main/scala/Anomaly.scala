@@ -31,81 +31,85 @@ class Anomaly(val spanId: String, val TraceId: String, val begin: Long, val end:
     !(children.size == 0)
   }
 
-  def getLeaves(): ListBuffer[Anomaly] = {
+  def getRootCauses(): ListBuffer[Anomaly] = {
+    //TODO: Traces of uncaught exceptions work the other way round
 //    println("Calling getLeaves for:" +this.endpointIdentifier)
-    var collectedLeaves: ListBuffer[Anomaly] = ListBuffer()
+    var collectedRootCauses: ListBuffer[Anomaly] = ListBuffer()
     if (hasChildren()) {
       for (child <- children) {
-        for (anomaly <- child.getLeaves()) {
-          collectedLeaves.append(anomaly)
+        for (anomaly <- child.getRootCauses()) {
+          collectedRootCauses.append(anomaly)
         }
       }
     } else {
-      collectedLeaves.append(this)
+      collectedRootCauses.append(this)
 //      println(this.endpointIdentifier+" is a leave")
     }
 
-    collectedLeaves
+    collectedRootCauses
 
   }
   
-  def getCalling(): ListBuffer[Anomaly] = {
-    val callingBuffer: ListBuffer[Anomaly] = ListBuffer()
+  def getWarnings(): ListBuffer[Anomaly] = {
+    //TODO: Traces of uncaught exceptions work the other way round
+    val warningBuffer: ListBuffer[Anomaly] = ListBuffer()
     if(parent!=null){
-      callingBuffer.append(parent)
-      for(calling <- parent.getCalling()){
-        callingBuffer.append(calling)
+      warningBuffer.append(parent)
+      for(warning <- parent.getWarnings()){
+        warningBuffer.append(warning)
       }
     }
     
-    callingBuffer
+    warningBuffer
     
   }
   
-  def printLeaves():String = {
-    var leaves = "["
+  def printRootCauses():String = {
+    var rootCauses = "["
     
     
-    for(leave <- getLeaves()){
-      if(!(leaves.last == '[')){
-      leaves = leaves+", "
+    for(leave <- getRootCauses()){
+      if(!(rootCauses.last == '[')){
+      rootCauses = rootCauses+", "
     }
-      leaves = leaves + leave.endpointIdentifier
+      rootCauses = rootCauses + leave.endpointIdentifier
     }
     
-    leaves = leaves + "]"
-    leaves
+    rootCauses = rootCauses + "]"
+    rootCauses
   }
   
-    def printCalling():String = {
-    var callingSpans = "["
+    def printWarnings():String = {
+    
+      
+      var warningSpans = "["
     
     
-    for(calling <- getCalling().reverse){
-      if(!(callingSpans.last == '[')){
-      callingSpans = callingSpans+", "
+    for(calling <- getWarnings().reverse){
+      if(!(warningSpans.last == '[')){
+      warningSpans = warningSpans+", "
     }
-      callingSpans = callingSpans +calling.endpointIdentifier
+      warningSpans = warningSpans +calling.endpointIdentifier
     }
     
-    callingSpans = callingSpans + "]"
-    callingSpans
+    warningSpans = warningSpans + "]"
+    warningSpans
   }
   
     
-    def printCallingSQL():String = {
-    var callingSpans = "["
+    def printWarningSQL():String = {
+    var warningSpans = "["
     
     
-    for(calling <- getCalling().reverse){
-      if(!(callingSpans.last == '[')){
-      callingSpans = callingSpans+", "
+    for(calling <- getWarnings().reverse){
+      if(!(warningSpans.last == '[')){
+      warningSpans = warningSpans+", "
     }
-      callingSpans = callingSpans + "\""+calling.endpointIdentifier+"\""
+      warningSpans = warningSpans + "\""+calling.endpointIdentifier+"\""
     }
     
-    callingSpans = callingSpans + "]"
-    callingSpans
+    warningSpans = warningSpans + "]"
+    warningSpans
   }
 
 

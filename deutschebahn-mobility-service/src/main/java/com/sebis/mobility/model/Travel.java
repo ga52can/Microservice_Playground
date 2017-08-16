@@ -5,22 +5,31 @@ package com.sebis.mobility.model;
  */
 public class Travel {
 
-    private int origin;
-    private int destination;
+	private int origin;
+	private int destination;
+	private String info = "";
 
-    public int getOrigin() {
-        return origin;
-    }
+	public String getInfo() {
+		return info;
+	}
 
-    public void setOrigin(int origin) {
-        this.origin = origin;
-    }
+	public void setInfo(String info) {
+		this.info = info;
+	}
 
-    public int getDestination() {
-        return destination;
-    }
+	public int getOrigin() {
+		return origin;
+	}
 
-    public void setDestination(int destination) {
-        this.destination = destination;
-    }
+	public void setOrigin(int origin) {
+		this.origin = origin;
+	}
+
+	public int getDestination() {
+		return destination;
+	}
+
+	public void setDestination(int destination) {
+		this.destination = destination;
+	}
 }

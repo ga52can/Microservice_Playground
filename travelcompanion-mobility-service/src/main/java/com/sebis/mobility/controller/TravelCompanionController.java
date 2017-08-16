@@ -38,95 +38,148 @@ import java.util.concurrent.Future;
 @RestController
 public class TravelCompanionController {
 
-    @Value("${name}")
-    private String serviceName;
+	@Value("${name}")
+	private String serviceName;
 
-    @Value("${maps-url}")
-    private String mapsUrl;
-    @Value(("${drive-now-url}"))
-    private String driveNowUrl;
-    @Value(("${deutsche-bahn-url}"))
-    private String deutscheBahnUrl;
+	@Value("${maps-url}")
+	private String mapsUrl;
+	@Value(("${drive-now-url}"))
+	private String driveNowUrl;
+	@Value(("${deutsche-bahn-url}"))
+	private String deutscheBahnUrl;
 
-    @Autowired
-    Tracer tracer;
+	@Autowired
+	Tracer tracer;
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
-    private @Autowired
-    RestTemplate restTemplate;
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+	private @Autowired RestTemplate restTemplate;
 
-    private final static String DRIVE_NOW = "drive-now";
-    private final static String DEUTSCHE_BAHN = "deutsche-bahn";
-    private final ExecutorService pool = Executors.newFixedThreadPool(10);
-    private static Logger log = Logger.getLogger(TravelCompanionController.class.getName());
+	private final static String DRIVE_NOW = "drive-now";
+	private final static String DEUTSCHE_BAHN = "deutsche-bahn";
+	private final ExecutorService pool = Executors.newFixedThreadPool(10);
+	private static Logger log = Logger.getLogger(TravelCompanionController.class.getName());
 
+	@RequestMapping(value = { "/routes", "/travelcompanion-mobility-service/routes" }, method = RequestMethod.GET)
+	@ResponseBody
+	public ModelAndView showCities(HttpServletRequest request) {
+		ModelAndView model = new ModelAndView("route");
+		List<City> cities = jdbcTemplate.query("SELECT city_id, city_name, latitude, longitude FROM cities",
+				(resultSet, i) -> {
+					int id = resultSet.getInt(1);
+					String cityName = resultSet.getString(2);
+					double latitude = resultSet.getDouble(3);
+					double longitude = resultSet.getDouble(4);
+					return new City(id, cityName, latitude, longitude);
+				});
+		model.addObject("cities", cities);
+		model.addObject("travel", new Travel());
+		return model;
+	}
 
-    @RequestMapping(value = {"/routes", "/travelcompanion-mobility-service/routes"}, method = RequestMethod.GET)
-    @ResponseBody
-    public ModelAndView showCities(HttpServletRequest request) {
-        ModelAndView model = new ModelAndView("route");
-        List<City> cities =
-                jdbcTemplate.query(
-                        "SELECT city_id, city_name, latitude, longitude FROM cities",
-                        (resultSet, i) -> {
-                            int id = resultSet.getInt(1);
-                            String cityName = resultSet.getString(2);
-                            double latitude = resultSet.getDouble(3);
-                            double longitude = resultSet.getDouble(4);
-                            return new City(id, cityName, latitude, longitude);
-                        });
-        model.addObject("cities", cities);
-        model.addObject("travel", new Travel());
-        return model;
-    }
+	@Async
+	public Future<List<Route>> getRoutes(final String baseUrl, Travel travel) {
+		ResponseEntity<List<Route>> routes = restTemplate.exchange(
+				baseUrl + "/getroutes?origin={origin}&destination={destination}&info={info}", HttpMethod.GET, null,
+				new ParameterizedTypeReference<List<Route>>() {
+				}, travel.getOrigin(), travel.getDestination(), travel.getInfo());
+		List<Route> results = routes.getStatusCode() == HttpStatus.OK ? routes.getBody() : new ArrayList<>();
+		return new AsyncResult<>(results);
+	}
 
-    @Async
-    public Future<List<Route>> getRoutes(final String baseUrl, Travel travel) {
-        ResponseEntity<List<Route>> routes =
-                restTemplate.exchange(
-                        baseUrl + "/getroutes?origin={origin}&destination={destination}",
-                        HttpMethod.GET,
-                        null,
-                        new ParameterizedTypeReference<List<Route>>(){},
-                        travel.getOrigin(),
-                        travel.getDestination()
-                );
-        List<Route> results = routes.getStatusCode() == HttpStatus.OK ? routes.getBody() : new ArrayList<>();
-        return new AsyncResult<>(results);
-    }
+	@PostMapping(value = { "/getroutes",
+			"/travelcompanion-mobility-service/getroutes" }, produces = MediaType.APPLICATION_JSON_VALUE)
+	@ResponseBody
+	@CrossOrigin
+	public RouteResults getRoutes(@ModelAttribute Travel travel, HttpServletResponse response) throws IOException {
+		RouteResults routeResults = new RouteResults();
 
-    @PostMapping(value = {"/getroutes", "/travelcompanion-mobility-service/getroutes"}, produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
-    @CrossOrigin
-    public RouteResults getRoutes(@ModelAttribute Travel travel, HttpServletResponse response) throws IOException{
-        RouteResults routeResults = new RouteResults();
+		// info String for triggering anomalies
+		String info = travel.getInfo();
 
-        ResponseEntity<String> mapsResponse =
-                restTemplate.getForEntity(
-                        mapsUrl + "/distance?origin={origin}&destination={destination}",
-                        String.class, travel.getOrigin(), travel.getDestination());
-        if (mapsResponse.getStatusCode() == HttpStatus.OK) {
-            ObjectMapper mapper = new ObjectMapper();
-            try {
-                HashMap<String, Double> map = mapper.readValue(mapsResponse.getBody(), HashMap.class);
-                routeResults.setDistance(map.get("result"));
-            } catch (JsonGenerationException e) {
-                e.printStackTrace();
-            }
+		// simulate uncaught NullpointerException
+		if (info.contains("travelCompanion-distance-nullpointer")) {
+			String nullPointer = null;
+			nullPointer.charAt(5);
+		}
 
+		// simulate performance issue
+		if (info.contains("travelCompanion-distance-25msDelay")) {
+			System.out.println("25ms delay");
+			try {
+				Thread.sleep(25);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		if (info.contains("travelCompanion-distance-50msDelay")) {
+			System.out.println("50ms delay");
+			try {
+				Thread.sleep(50);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		if (info.contains("travelCompanion-distance-100msDelay")) {
+			System.out.println("100ms delay");
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		if (info.contains("travelCompanion-distance-200msDelay")) {
+			System.out.println("200ms delay");
+			try {
+				Thread.sleep(200);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 
-        }
-        Future<List<Route>> driveNowRoutes = getRoutes(driveNowUrl, travel);
-        Future<List<Route>> deutscheBahnRoutes = getRoutes(deutscheBahnUrl, travel);
-        try {
-            routeResults.addRoutes(driveNowRoutes.get());
-            routeResults.addRoutes(deutscheBahnRoutes.get());
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("Error getting routes from partner services");
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
-        return routeResults;
-    }
+		if (info.contains("travelCompanion-badRequestToMapsHelper")) {
+			ResponseEntity<String> mapsResponse = restTemplate.getForEntity(
+					mapsUrl + "/distance?origin={origin}&destination={destination}&bla={info}", String.class,
+					travel.getOrigin(), travel.getDestination(), travel.getInfo());
+			if (mapsResponse.getStatusCode() == HttpStatus.OK) {
+				ObjectMapper mapper = new ObjectMapper();
+				try {
+					HashMap<String, Double> map = mapper.readValue(mapsResponse.getBody(), HashMap.class);
+					routeResults.setDistance(map.get("result"));
+				} catch (JsonGenerationException e) {
+					e.printStackTrace();
+				}
+
+			}
+		}else{
+			ResponseEntity<String> mapsResponse = restTemplate.getForEntity(
+					mapsUrl + "/distance?origin={origin}&destination={destination}&info={info}", String.class,
+					travel.getOrigin(), travel.getDestination(), travel.getInfo());
+			if (mapsResponse.getStatusCode() == HttpStatus.OK) {
+				ObjectMapper mapper = new ObjectMapper();
+				try {
+					HashMap<String, Double> map = mapper.readValue(mapsResponse.getBody(), HashMap.class);
+					routeResults.setDistance(map.get("result"));
+				} catch (JsonGenerationException e) {
+					e.printStackTrace();
+				}
+
+			}
+		}
+		Future<List<Route>> driveNowRoutes = getRoutes(driveNowUrl, travel);
+		Future<List<Route>> deutscheBahnRoutes = getRoutes(deutscheBahnUrl, travel);
+		try {
+			routeResults.addRoutes(driveNowRoutes.get());
+			routeResults.addRoutes(deutscheBahnRoutes.get());
+		} catch (InterruptedException | ExecutionException e) {
+			log.error("Error getting routes from partner services");
+			response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+		}
+		return routeResults;
+	}
 
 }
