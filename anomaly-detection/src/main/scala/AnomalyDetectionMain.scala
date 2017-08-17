@@ -64,7 +64,7 @@ object AnomalyDetectionMain {
   val sparkAppName = "KafkaKMeans"
   val sparkMaster = "local[4]"
   val sparkLocalDir = "C:/tmp"
-  val batchInterval = 1
+  val batchInterval = 5
   val checkpoint = "checkpoint"
 
   //global fields
@@ -131,13 +131,13 @@ object AnomalyDetectionMain {
 
     //    val predictionHttpSpanStream = StreamUtil.filterSpanStreamForHttpRequests(predictionSpanStream)
 
-    ErrorDetection.errorDetection(predictionSpanStream, anomalyOutputTopic, kafkaServers, true, false) //true false -> do not write to Kafka - just print errors
+    ErrorDetection.errorDetection(predictionSpanStream, anomalyOutputTopic, kafkaServers, true, true) //true false -> do not write to Kafka - just print errors
 
-    //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilizationAvgLastMinute", 80, true, anomalyOutputTopic, kafkaServers, true, false)
+    FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "cpu.system.utilizationAvgLastMinute", 98, false, anomalyOutputTopic, kafkaServers, true, true)
 
-    //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, true, anomalyOutputTopic, kafkaServers, true,  false)
+    //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, false, anomalyOutputTopic, kafkaServers, true,  false)
 
-        KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, true)
+//        KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, true)
 
     //    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels, anomalyOutputTopic, kafkaServers, true, false)
 
@@ -158,7 +158,7 @@ object AnomalyDetectionMain {
     val median = Math.sqrt(result._3)
     val avg = Math.sqrt(result._4)
     val max = Math.sqrt(result._5)
-    val durationDivisor = result._5
+    val durationDivisor = result._6(0)
 
     println("----Results for " + spanName + "----")
     for (i <- 0 until model.clusterCenters.length) {

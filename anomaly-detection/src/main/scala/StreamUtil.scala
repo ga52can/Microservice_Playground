@@ -162,7 +162,7 @@ object StreamUtil {
     val groupedStream = anomalyTupleStream.map(x => (x._2, (x._1, x._2, x._3, x._4, x._5, x._6,x._7))).groupByKey()
     val anomalyStream = groupedStream.map(x => {
       //(spanId, traceId, begin, end, endpointIdentifier, anomalyDescriptor)
-      var anomalyList = x._2.toList.sortBy(x => (x._3, x._4))
+      var anomalyList = x._2.toList.sortBy(x => (x._3, x._4, x._1)) //add span id(x._1) as http/mvc spans can potentially have same start and end - as the mvc spans id gets an additional mvc as first letters when reporting to the anomaly queue this can be used to create the order in those cases
       var anomaly: Anomaly = null
       for(anomalyTuple <- anomalyList){
         if(anomaly==null){

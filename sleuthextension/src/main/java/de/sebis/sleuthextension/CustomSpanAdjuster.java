@@ -16,33 +16,31 @@ public class CustomSpanAdjuster implements SpanAdjuster {
 
 	@Override
 	public Span adjust(Span span) {
-
-		;
 		
-		try {
-//			span.tag("cpu.system.utilization", Double.toString(getSystemCpuLoad()));
-			span.tag("cpu.system.utilizationAvgLastMinute", Double.toString(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage()));
-		} catch (Exception e) {
-			span.tag("cpu.system.utilization", e.getMessage());
-			System.out.println("Issue while trying to access cpu utilization information");
-		}
-
-		
-        int mb = 1024*1024;
-		
-		Runtime runtime = Runtime.getRuntime();
-		
-		Long totalMemory = runtime.totalMemory()/ mb;
-		Long freeMemory = runtime.freeMemory()/ mb;
-		Long maxMemory = runtime.maxMemory()/mb;
-		Long usedMemory = totalMemory - freeMemory;
-		Long memoryUtilization = (long) ((usedMemory.doubleValue()/maxMemory.doubleValue())*100);
-		
-		span.tag("jvm.usedMemory.mb", usedMemory+"");
-		span.tag("jvm.totalMemory.mb", totalMemory+"");
-		span.tag("jvm.freeMemory.mb", freeMemory+"");
-		span.tag("jvm.maxMemory.mb", maxMemory+"");
-		span.tag("jvm.memoryUtilization", memoryUtilization+"");
+//		try {
+////			span.tag("cpu.system.utilization", Double.toString(getSystemCpuLoad()));
+//			span.tag("cpu.system.utilizationAvgLastMinute", Double.toString(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage()));
+//		} catch (Exception e) {
+//			span.tag("cpu.system.utilization", e.getMessage());
+//			System.out.println("Issue while trying to access cpu utilization information");
+//		}
+//
+//		
+//        int mb = 1024*1024;
+//		
+//		Runtime runtime = Runtime.getRuntime();
+//		
+//		Long totalMemory = runtime.totalMemory()/ mb;
+//		Long freeMemory = runtime.freeMemory()/ mb;
+//		Long maxMemory = runtime.maxMemory()/mb;
+//		Long usedMemory = totalMemory - freeMemory;
+//		Long memoryUtilization = (long) ((usedMemory.doubleValue()/maxMemory.doubleValue())*100);
+//		
+//		span.tag("jvm.usedMemory.mb", usedMemory+"");
+//		span.tag("jvm.totalMemory.mb", totalMemory+"");
+//		span.tag("jvm.freeMemory.mb", freeMemory+"");
+//		span.tag("jvm.maxMemory.mb", maxMemory+"");
+//		span.tag("jvm.memoryUtilization", memoryUtilization+"");
 
 		return span;
 	}

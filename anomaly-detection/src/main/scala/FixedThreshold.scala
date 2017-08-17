@@ -76,7 +76,7 @@ object FixedThreshold {
 
   private def reportAnomaly(value: Double, threshold: Double, tagToMonitor:String, span: Span, host: Host, anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
-    val anomalyDescriptor = "fixedThreshold-"+tagToMonitor
+    val anomalyDescriptor = "fixedThreshold-"+tagToMonitor+">"+threshold
     
     val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
       

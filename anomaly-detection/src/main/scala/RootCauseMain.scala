@@ -92,12 +92,11 @@ object RootCauseMain {
     Logger.getRootLogger.setLevel(rootLoggerLevel)
 
     val anomalyStream = StreamUtil.getAnomalyStreamFromKafka(ssc, "earliest", "rca5", kafkaServers, anomalyOutputTopic)
-    anomalyStream.count().print()
+    
 
     //find spans with the same SpanId and combine their errorMessage to handle them as one Span thereafter
     val combinedBySpanId = StreamUtil.combineAnomaliesBySpanId(anomalyStream)
-    combinedBySpanId.count().print()
-
+   
     //groupSpans by TraceID
     val aggregatedAnomalyStream = StreamUtil.getAnomaliesAggregatedByTraceId(combinedBySpanId)
 
