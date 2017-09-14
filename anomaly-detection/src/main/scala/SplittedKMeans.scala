@@ -62,7 +62,6 @@ object KafkaSplittedKMeans {
 
     var filterRdd = ssc.sparkContext.emptyRDD[String]
 
-    //    var vectorRdd = ssc.sparkContext.emptyRDD[(String, Vector)]
 
     var kMeansInformationRdd = ssc.sparkContext.emptyRDD[(String, Long, Long, Long, Double)] //identifier for splitting, begin(yyyy/MM/dd-HH:mm), duration
 
@@ -85,16 +84,6 @@ object KafkaSplittedKMeans {
 
     }
 
-    //    val spanDurationVectorStream = StreamUtil.getSpanDurationVectorStreamFromSpanStream(spanStream)
-
-    //    spanDurationVectorStream.foreachRDD { rdd =>
-    //      if (rdd.count() == 0) {
-    //        flag = 1
-    //      }
-    //      println(rdd.count())
-    //      vectorRdd = vectorRdd.union(rdd)
-    //
-    //    }
 
     Logger.getRootLogger.setLevel(rootLoggerLevel)
     ssc.start()
@@ -108,74 +97,34 @@ object KafkaSplittedKMeans {
     println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis()) + " : Finished extracting kMeansInformationStream to RDD")
     kMeansInformationRdd = kMeansInformationRdd.cache()
 
-    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis()) + " : Entering rpm calculation")
-    kMeansInformationRdd.sortBy(_._2, true)
-
-    var kMeansFeatureListBuffer: ListBuffer[(String, Long, Long, Long, Double)] = ListBuffer()
-    var buffer: collection.mutable.Map[String, Array[Long]] = collection.mutable.Map()
-
-    //this part is decreasing in performance the higher the amount of requests per the defined time interval is
-    kMeansInformationRdd.collect.foreach(x => {
-      val ts = x._2
-      val identifier = x._1 //make sure the identifier represents actually the entity that receives the traffic -e.g. machine (IP?) not only endpoint
-
-      //      val identifier = "system"
-      var bufferInstance = buffer.get(identifier).getOrElse(Array[Long]())
-
-      bufferInstance = bufferInstance ++ Array(ts)
-
-      bufferInstance = bufferInstance.filter(p => p > ts - 60000)
-
-      buffer.put(identifier, bufferInstance)
-
-      val rpm = bufferInstance.size.toLong
-
-      kMeansFeatureListBuffer.append((identifier, x._3, rpm, x._4, x._5)) //identifier, duration, rpm, memory, cpu
-
-    })
-
-    val kMeansFeatureRdd = sc.parallelize(kMeansFeatureListBuffer)
-    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis()) + " : Finished rpm calculation")
-
-//    val stat = Statistics.colStats(kMeansFeatureRdd.map(x => Vectors.dense(x._2, x._3, x._4, x._5)))
-//
-//    println("Max: " + stat.max.toJson)
-//    println("Min: " + stat.min.toJson)
-//    println("Mean: " + stat.mean.toJson)
-//    println("Variance: " + stat.variance.toJson)
-//    println("NormL1: " + stat.normL1.toJson)
-//    println("NormL1: " + stat.normL2.toJson)
+    
+//  Use either the first line with rpm calculation or the second line without it - if you do not need it, it saves time when starting the application
+//    var kMeansFeatureRdd = calculateRequestPerTimeInformation(sc, kMeansInformationRdd, 60000) //60000 for rpm, 1000 for rps (for everything below 5 seconds the mini batch duration has to be lowered to match the sliding window on the predictor side later on
+    var kMeansFeatureRdd = kMeansInformationRdd.map(x=>(x._1,x._3,x._2,x._4,x._5)) //identifier, duration, (rpm) -> will be begin w/o rpm calculation, memory, cpu expected
 
     println("kMeansFeatureRdd Count: " + kMeansFeatureRdd.count())
 
     kMeansInformationRdd.unpersist(true)
 
-    //    val kMeansFeatureVectorRdd = kMeansFeatureRdd.map(x => (x._1, Vectors.dense(x._2, x._3)))
-
-    //    val vectorRdd = kMeansFeatureRdd.map(x => (x._1, Vectors.dense(x._2, x._3, x._4, x._5)))
-    //    vectorRdd.cache()
-
     println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis()) + " : Starting to train SplittedKMeansModel")
 
     kMeansFeatureRdd.cache()
+    
     val splittedAndScaledFeatureSet = splitAndScale(kMeansFeatureRdd, filterRdd)
 
     val modelSet = trainModelsForFilterList(splittedAndScaledFeatureSet, sc)
 
     println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis()) + " : Finished Training SplittedKMeansModel")
 
-    //    vectorRdd.unpersist(true)
     kMeansFeatureRdd.unpersist(true)
     modelSet
 
   }
 
-  //If you want to predict only on httpSpanStream, make sure to filter SpanStream before handing over to this method
   def anomalyDetection(ssc: StreamingContext, spanStream: DStream[(Host, Span)], models: Map[String, (KMeansModel, Double, Double, Double, Double, Array[Double])], anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
     var rpmMap: collection.mutable.Map[String, Long] = collection.mutable.Map()
 
-    //    val fullInformationSpanDurationVectorStream = StreamUtil.getFullInformationSpanDurationVectorStreamFromSpanStream(spanStream)
     val spanNameStream = StreamUtil.getSpanNameStreamFromSpanStream(spanStream)
 
     val requestsPerMinute = spanNameStream.countByValueAndWindow(Seconds(60), Seconds(5)).foreachRDD(rdd => {
@@ -201,6 +150,7 @@ object KafkaSplittedKMeans {
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
           "org.apache.kafka.common.serialization.StringSerializer")
         val producer = new KafkaProducer[String, String](props)
+        
 
         //option to put the creation of the kafka message producer to be only created for each partition if performance would matter
         partition.foreach(x => {
@@ -213,9 +163,49 @@ object KafkaSplittedKMeans {
           //        }
         })
 
+        producer.close()
       })
 
     }
+  }
+  
+  
+  /**
+   * Columns of returned RDD: identifier, duration, rpm, memory, cpu
+   */
+  private def calculateRequestPerTimeInformation(sc: SparkContext, kMeansRdd: RDD[(String, Long, Long, Long, Double)], timeIntervalMillis: Long ): RDD[(String, Long, Long, Long, Double)] = {
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis()) + " : Entering rpm calculation")
+    
+    var kMeansInformationRdd = kMeansRdd
+    kMeansInformationRdd.sortBy(_._2, true)
+
+    var kMeansFeatureListBuffer: ListBuffer[(String, Long, Long, Long, Double)] = ListBuffer()
+    var buffer: collection.mutable.Map[String, Array[Long]] = collection.mutable.Map()
+
+    //this part is decreasing in performance the higher the amount of requests per the defined time interval is
+    kMeansInformationRdd.collect.foreach(x => {
+      val ts = x._2
+      val identifier = x._1 //make sure the identifier represents actually the entity that receives the traffic -e.g. machine (IP?) not only endpoint
+
+      //      val identifier = "system"
+      var bufferInstance = buffer.get(identifier).getOrElse(Array[Long]())
+
+      bufferInstance = bufferInstance ++ Array(ts)
+
+      bufferInstance = bufferInstance.filter(p => p > ts - timeIntervalMillis) //60000 for rpm, 1000 for rps
+
+      buffer.put(identifier, bufferInstance)
+
+      val rpm = bufferInstance.size.toLong
+
+      kMeansFeatureListBuffer.append((identifier, x._3, rpm, x._4, x._5)) //identifier, duration, rpm, memory, cpu
+
+    })
+
+    val kMeansFeatureRdd = sc.parallelize(kMeansFeatureListBuffer)
+    println(StreamUtil.unixMilliToDateTimeStringMilliseconds(System.currentTimeMillis()) + " : Finished rpm calculation")
+    
+    kMeansFeatureRdd
   }
 
   private def isAnomaly(datapoint: (Host, Span), models: Map[String, (KMeansModel, Double, Double, Double, Double, Array[Double])], rpmMap: collection.mutable.Map[String, Long]): Boolean = {

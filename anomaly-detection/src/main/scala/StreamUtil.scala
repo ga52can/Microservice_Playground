@@ -176,6 +176,9 @@ object StreamUtil {
     anomalyStream
   }
 
+  /**
+   * EndpointIdentifier, Begin, AccumulatedMicros, jvm.memoryUtilization, cpu.system.utilizationAvgLastMinute
+   */
   def getkMeansInformationStream(spanStream: DStream[(Host, Span)]): DStream[(String, Long, Long, Long, Double)] = {
     val kMeansInformationStream = spanStream.map(x => (getEndpointIdentifierFromHostAndSpan(x._1, x._2), x._2.getBegin, x._2.getAccumulatedMicros, x._2.tags().getOrDefault("jvm.memoryUtilization", "0").toLong, x._2.tags().getOrDefault("cpu.system.utilizationAvgLastMinute", "0").toDouble))
     kMeansInformationStream

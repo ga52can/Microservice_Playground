@@ -63,8 +63,8 @@ object ErrorDetection {
     if ((status_code.isEmpty() || whitelistedStatusCodes.contains(status_code)) && input._2.tags().get("error") == null) 
       false
     //A span with status code 404 is (at least in this setup) only issued in the case of a call of a not existing page
-    //This means it should usually only be a problem that is caused by a user entering a wrong ur
-    //If (in this demo setup) an internally called service is not available a 500 +  error message is issued
+    //This means it should usually only be a problem that is caused by a user entering a wrong url
+    //If (in this demo setup) an internally called service is not available a 500 + error message is issued
     else if(status_code.equals("404"))
         false
     //only return the 500er spans that actually do have an error message - the error message is set to the first span
@@ -103,7 +103,7 @@ object ErrorDetection {
                 val httpStatusCode = tagMap.getOrElse("http.status_code", "").asInstanceOf[String];
                 val errorMessage = tagMap.getOrElse("error", "not set")
 
-                val errorCode = "errorDetector:" + httpStatusCode +errorMessage
+                val errorCode = "Error: " + httpStatusCode +" - Message: "+errorMessage
                 val anomalyJson = StreamUtil.generateAnomalyJSON(host, span, errorCode)
                 val message = new ProducerRecord[String, String](errorOutputTopic, null, anomalyJson)
                 if (writeToKafka) {
@@ -114,6 +114,7 @@ object ErrorDetection {
                 }
               }
           }
+          producer.close()
         })
   }
 

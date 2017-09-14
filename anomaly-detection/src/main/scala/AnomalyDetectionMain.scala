@@ -137,7 +137,7 @@ object AnomalyDetectionMain {
 
     //        FixedThreshold.monitorTagForFixedThreshold(predictionSpanStream, "jvm.memoryUtilization", 15, false, anomalyOutputTopic, kafkaServers, true,  false)
 
-//        KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, true)
+    KafkaSplittedKMeans.anomalyDetection(predictionSsc, predictionSpanStream, splittedKMeansModels, anomalyOutputTopic, kafkaServers, true, true)
 
     //    SingleValueStatistics.anomalyDetection(predictionSsc, predictionHttpSpanStream, singleValueStatisticsModels, anomalyOutputTopic, kafkaServers, true, false)
 

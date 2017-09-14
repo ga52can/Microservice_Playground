@@ -48,35 +48,41 @@ object FixedThreshold {
 
     cleanedValueStream.foreachRDD(rdd => {
 
-      rdd.foreach(x => {
+      rdd.foreachPartition(partition => {
+        
+        val props = new HashMap[String, Object]()
+          props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
+          props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+            "org.apache.kafka.common.serialization.StringSerializer")
+          props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+            "org.apache.kafka.common.serialization.StringSerializer")
+          val producer = new KafkaProducer[String, String](props)
+        
+        partition.foreach(x=> {
         try{
         val value = x._3.toDouble
         if (value > threshold) {
           
           
-            reportAnomaly(value, threshold, tagToMonitor, x._2, x._1,anomalyOutputTopic, kafkaServers, printAnomaly, writeToKafka)
+            reportAnomaly(value, threshold, tagToMonitor, x._2, x._1,anomalyOutputTopic, kafkaServers, producer, printAnomaly, writeToKafka)
         
           
         }
         }catch{
           case numberFormatException: java.lang.NumberFormatException => {println("NumberFormatException while trying to convert value of tag "+tagToMonitor)}
         }
+        })
+        producer.close()
       })
-
-      //      if(writeToKafka){
-      //        printErrorsAndWriteToTopic(rdd, defaultErrorOutputTopic)
-      //      }else{
-      //        printErrors(rdd)
-      //      }
 
     })
 
     Logger.getRootLogger.setLevel(rootLoggerLevel)
   }
 
-  private def reportAnomaly(value: Double, threshold: Double, tagToMonitor:String, span: Span, host: Host, anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
+  private def reportAnomaly(value: Double, threshold: Double, tagToMonitor:String, span: Span, host: Host, anomalyOutputTopic: String, kafkaServers: String, producer: KafkaProducer[String, String], printAnomaly: Boolean, writeToKafka: Boolean) = {
 
-    val anomalyDescriptor = "fixedThreshold-"+tagToMonitor+">"+threshold
+    val anomalyDescriptor = tagToMonitor+" > "+threshold
     
     val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
       
@@ -85,13 +91,6 @@ object FixedThreshold {
     }
     
     if(writeToKafka){
-      val props = new HashMap[String, Object]()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
-    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-      "org.apache.kafka.common.serialization.StringSerializer")
-    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-      "org.apache.kafka.common.serialization.StringSerializer")
-    val producer = new KafkaProducer[String, String](props)
 
     val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
     producer.send(message)
