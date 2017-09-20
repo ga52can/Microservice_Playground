@@ -126,7 +126,7 @@ object RootCauseMain {
             println("-------------------\nanomaly: " + anomaly.endpointIdentifier + "\ncalledBy: " + anomaly.printWarnings() + "\n-------------------")
             if(connection!=null){
             val statement = connection.createStatement()
-            val query= "INSERT INTO anomalies.anomalies (endpoint, warnings, information, traceid) VALUES ('" + anomaly.endpointIdentifier + "','" + anomaly.printWarningSQL() + "','" + anomaly.errorDescriptor + "','" + anomaly.TraceId + "');"
+            val query= "INSERT INTO anomalies.anomalies (endpoint, warnings, information, traceid) VALUES ('" + anomaly.endpointIdentifier + "','" + anomaly.printWarningSQL() + "','" + anomaly.errorDescriptor + "','" + anomaly.traceId + "');"
             statement.executeUpdate(query)
             
             println("Exdecuted:" +query)
@@ -140,7 +140,7 @@ object RootCauseMain {
           connection.close()
         }
           } catch {
-          case e => e.printStackTrace
+          case e: Throwable => e.printStackTrace
         }
         
       })

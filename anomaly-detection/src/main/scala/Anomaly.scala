@@ -1,19 +1,21 @@
 import scala.collection.mutable.ListBuffer
 import scala.tools.ant.sabbus.Break
 
-class Anomaly(val spanId: String, val TraceId: String, val begin: Long, val end: Long, val endpointIdentifier: String, val errorDescriptor: String, val parentId: String) {
+class Anomaly(val spanId: String, val traceId: String, val begin: Long, val end: Long, val endpointIdentifier: String, val errorDescriptor: String, val parentId: String) {
 
   var children: ListBuffer[Anomaly] = ListBuffer()
   var parent: Anomaly = null
 
   /**
    * Assumes the anomalies are inserted into the anomaly of a trace with
-   * the smalles begin sorted by begin in ascending order
+   * the earliest begin sorted by begin in ascending order
    */
   def insert(anomaly: Anomaly): Unit = {
     var inserted = false
     for (child <- children) {
-      if (child.parentId==this.spanId||(anomaly.begin > child.begin && anomaly.end <= child.end)||anomaly.begin >= child.begin && anomaly.end < child.end) {//TODO: Sortierung bei http -> mvc - leicht versetzte Zeitfenster aber sinngemäßg http ruf mvc auf - durch manipulation der ID (z.B. x.toString+"mvc") und entsprechend bei insert behandeln
+      if (anomaly.parentId==this.spanId 
+          ||(anomaly.begin > child.begin && anomaly.end <= child.end)
+          ||anomaly.begin >= child.begin && anomaly.end < child.end) {
         if (!inserted) {
         child.insert(anomaly)
         inserted = true}
@@ -22,8 +24,6 @@ class Anomaly(val spanId: String, val TraceId: String, val begin: Long, val end:
     if (!inserted) {
       children.append(anomaly)
       anomaly.parent = this
-//      println("Inserted " + anomaly.endpointIdentifier+" into "+this.endpointIdentifier)
-      
     }
   }
 

@@ -31,7 +31,6 @@ object FixedThreshold {
   //Logger
   val rootLoggerLevel = Level.WARN
 
-
   def monitorTagForFixedThreshold(spanStream: DStream[(Host, Span)], tagToMonitor: String, threshold: Double, tagShouldAlwaysBeAvailable: Boolean, anomalyOutputTopic: String, kafkaServers: String, printAnomaly: Boolean, writeToKafka: Boolean) = {
 
     val valueStream = spanStream.map(x => (x._1, x._2, x._2.tags().get(tagToMonitor)))
@@ -49,28 +48,20 @@ object FixedThreshold {
     cleanedValueStream.foreachRDD(rdd => {
 
       rdd.foreachPartition(partition => {
-        
-        val props = new HashMap[String, Object]()
-          props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
-          props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-            "org.apache.kafka.common.serialization.StringSerializer")
-          props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-            "org.apache.kafka.common.serialization.StringSerializer")
-          val producer = new KafkaProducer[String, String](props)
-        
-        partition.foreach(x=> {
-        try{
-        val value = x._3.toDouble
-        if (value > threshold) {
-          
-          
-            reportAnomaly(value, threshold, tagToMonitor, x._2, x._1,anomalyOutputTopic, kafkaServers, producer, printAnomaly, writeToKafka)
-        
-          
-        }
-        }catch{
-          case numberFormatException: java.lang.NumberFormatException => {println("NumberFormatException while trying to convert value of tag "+tagToMonitor)}
-        }
+//creating a consumer is expensive - therefore create it only once per partition and not once per RDD line 
+        val producer = StreamUtil.createKafkaProducer(kafkaServers)
+
+        partition.foreach(x => {
+          try {
+            val value = x._3.toDouble
+            if (value > threshold) {
+
+              reportAnomaly(value, threshold, tagToMonitor, x._2, x._1, anomalyOutputTopic, kafkaServers, producer, printAnomaly, writeToKafka)
+
+            }
+          } catch {
+            case numberFormatException: java.lang.NumberFormatException => { println("NumberFormatException while trying to convert value of tag " + tagToMonitor) }
+          }
         })
         producer.close()
       })
@@ -80,22 +71,21 @@ object FixedThreshold {
     Logger.getRootLogger.setLevel(rootLoggerLevel)
   }
 
-  private def reportAnomaly(value: Double, threshold: Double, tagToMonitor:String, span: Span, host: Host, anomalyOutputTopic: String, kafkaServers: String, producer: KafkaProducer[String, String], printAnomaly: Boolean, writeToKafka: Boolean) = {
+  private def reportAnomaly(value: Double, threshold: Double, tagToMonitor: String, span: Span, host: Host, anomalyOutputTopic: String, kafkaServers: String, producer: KafkaProducer[String, String], printAnomaly: Boolean, writeToKafka: Boolean) = {
 
-    val anomalyDescriptor = tagToMonitor+" > "+threshold
-    
+    val anomalyDescriptor = tagToMonitor + " > " + threshold
+
     val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
-      
-    if(printAnomaly){
+
+    if (printAnomaly) {
       println(anomalyJSON)
     }
-    
-    if(writeToKafka){
 
-    val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
-    producer.send(message)
+    if (writeToKafka) {
+
+      val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
+      producer.send(message)
     }
-    
 
   }
 

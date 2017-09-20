@@ -32,6 +32,34 @@ import org.joda.time.format.DateTimeFormat
 import org.joda.time.DateTime
 
 object StreamUtil {
+  
+    def reportAnomaly(host: Host, span: Span, anomalyOutputTopic: String, kafkaServers: String, producer: KafkaProducer[String, String], printAnomaly: Boolean, writeToKafka: Boolean) = {
+
+    val anomalyDescriptor = "splittedKMeans"
+
+    val anomalyJSON = StreamUtil.generateAnomalyJSON(host, span, anomalyDescriptor)
+
+    if (printAnomaly) {
+      println(anomalyDescriptor+" - anomaly: " + StreamUtil.getEndpointIdentifierFromHostAndSpan(host, span) + " - duration:" + span.getAccumulatedMicros)
+    }
+
+    if (writeToKafka) {
+
+      val message = new ProducerRecord[String, String](anomalyOutputTopic, null, anomalyJSON)
+      producer.send(message)
+    }
+  }
+
+  def createKafkaProducer(kafkaServers: String): KafkaProducer[String, String] = {
+    val props = new HashMap[String, Object]()
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServers)
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+      "org.apache.kafka.common.serialization.StringSerializer")
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+      "org.apache.kafka.common.serialization.StringSerializer")
+    val producer = new KafkaProducer[String, String](props)
+    producer
+  }
 
   def getEndpointIdentifierFromHostAndSpan(host: Host, span: Span): String = {
     //    This identifier includes IP
@@ -49,14 +77,14 @@ object StreamUtil {
     //this if clause makes sure the IDs of those spans are unique once we get to root cause analysis
     //as all SpanIds seem to have 19 digits (plus an additional negative sign in some cases) * 1000 seems a good way to make them
     //unique and keep them as long
-    if(span.tags().get("mvc.controller.class")!=null){
-      spanId = "mvc"+spanId
+    if (span.tags().get("mvc.controller.class") != null) {
+      spanId = "mvc" + spanId
     }
     val traceId = span.getTraceId.toString
     val begin = span.getBegin
     val end = span.getEnd
     var parentId = 0L
-    if(span.getParents.size()>0){
+    if (span.getParents.size() > 0) {
       parentId = span.getParents.get(0)
     }
     val errorJSON = "{\"endpointIdentifier\":\"" + endpointIdentifier + "\", \"spanId\":\"" + spanId + "\", \"traceId\":\"" + traceId + "\", \"anomalyDescriptor\":\"" + anomalyDescriptor + "\", \"begin\":\"" + begin + "\", \"end\":\"" + end + "\", \"parentId\":\"" + parentId + "\"}"
@@ -157,17 +185,17 @@ object StreamUtil {
     aggregatedStream.map(x => x._2)
   }
 
-  def getAnomaliesAggregatedByTraceId(anomalyTupleStream: DStream[(String, String, Long, Long, String, String, String)]): DStream[Anomaly]={
+  def getAnomaliesAggregatedByTraceId(anomalyTupleStream: DStream[(String, String, Long, Long, String, String, String)]): DStream[Anomaly] = {
 
-    val groupedStream = anomalyTupleStream.map(x => (x._2, (x._1, x._2, x._3, x._4, x._5, x._6,x._7))).groupByKey()
+    val groupedStream = anomalyTupleStream.map(x => (x._2, (x._1, x._2, x._3, x._4, x._5, x._6, x._7))).groupByKey()
     val anomalyStream = groupedStream.map(x => {
       //(spanId, traceId, begin, end, endpointIdentifier, anomalyDescriptor)
       var anomalyList = x._2.toList.sortBy(x => (x._3, x._4, x._1)) //add span id(x._1) as http/mvc spans can potentially have same start and end - as the mvc spans id gets an additional mvc as first letters when reporting to the anomaly queue this can be used to create the order in those cases
       var anomaly: Anomaly = null
-      for(anomalyTuple <- anomalyList){
-        if(anomaly==null){
+      for (anomalyTuple <- anomalyList) {
+        if (anomaly == null) {
           anomaly = new Anomaly(anomalyTuple._1, anomalyTuple._2, anomalyTuple._3, anomalyTuple._4, anomalyTuple._5, anomalyTuple._6, anomalyTuple._7)
-        }else{
+        } else {
           anomaly.insert(new Anomaly(anomalyTuple._1, anomalyTuple._2, anomalyTuple._3, anomalyTuple._4, anomalyTuple._5, anomalyTuple._6, anomalyTuple._7))
         }
       }
