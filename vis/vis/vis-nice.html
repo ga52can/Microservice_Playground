@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+
+    <script type="text/javascript" src="vis.min.js"></script>
+    <link href="vis.min.css" rel="stylesheet" type="text/css" />
+
+    <style type="text/css">
+    #main {
+        width: 100%;
+        min-height: 100%;
+
+    }
+        #mynetwork {
+            width: 100%;
+            height: 100%;
+
+        }
+    </style>
+
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="generator" content="Jekyll v3.5.2">
+
+<title>Anomaly Visualization</title>
+
+<!-- Icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.4.1/css/simple-line-icons.min.css" rel="stylesheet">
+
+<!-- CSS Style -->
+<link href="../../assets/css/style.min.css" rel="stylesheet">
+<link href="../../assets/css/docs.min.css" rel="stylesheet">
+
+
+  </head>
+  <body class="app header-fixed sidebar-fixed">
+    <header class="app-header navbar">
+  <button class="navbar-toggler mobile-sidebar-toggler d-lg-none" type="button">&#9776;</button>
+  <a class="navbar" href="#"></a>
+  <ul class="nav navbar-nav">
+    <li class="nav-item">
+      <a class="nav-link navbar-toggler sidebar-toggler" href="#">&#9776;</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="/index.html">Home</a>
+    </li>
+  </ul>
+  <ul class="navbar-nav ml-md-auto">
+
+  </ul>
+</header>
+
+    <div class="app-body">
+      <div class="sidebar">
+        <nav class="sidebar-nav" id="docsNavbarContent">
+  <ul class="nav">
+
+    <li class="nav-item nav-dropdown active">
+      <a class="nav-link nav-dropdown-toggle" href="#"><i class="icon-star"></i>
+        Anomaly Detection
+      </a>
+      <ul class="nav-dropdown-items">
+
+          <li class="nav-item active bd-sidenav-active">
+            <a class="nav-link" href="/vis-nice.html">
+              <i class="fa fa-empty" aria-hidden="true"></i> Visualization
+            </a>
+
+          </li>
+
+          <li class="nav-item ">
+            <a class="nav-link" href="/events.html">
+              <i class="fa fa-empty" aria-hidden="true"></i> Trigger Events
+            </a>
+
+          </li>
+
+      </ul>
+    </li>
+
+</nav>
+
+      </div>
+      <main class="main" id="main">
+        <div id="mynetwork"></div>
+
+        <script type="text/javascript">
+            // create an array with nodes
+            var nodes = new vis.DataSet([
+                //{id:'business-core-service@ignoredIP:5000/business-core-service/businesses/list:::BusinessListControllergetServices', label: 'bcs:5000/bcs/businesses/list:::BLC-getServices', color:'lightgrey'},
+                //{id: 'zuul-service@ignoredIP:9000/business-core-service/businesses/list:::GET', label: 'zuul:9000/bcs/businesses/list:::GET', color:'lightgrey'},
+                //{id: 'zuul-service@ignoredIP:9000/business-core-service/businesses/list:::null', label: 'zuul:9000/business-core-service/businesses/list:::null', color:'lightgrey'},
+
+                //{id: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::BasicErrorControllererror', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/travelcompanion-mobility-service/getroutes\nBasicErrorController.error', color:'lightgrey'},
+
+                {id: 'deutschebahn-mobility-service@ignoredIP:6003/deutschebahn-mobility-service/getroutes:::DeutscheBahnControllerfindDistance', label: 'deutschebahn-mobility-service\n@ignoredIP:6003/deutschebahn-mobility-service/getroutes\nDeutscheBahnController.findDistance', color:'lightgrey'},
+                {id: 'drivenow-mobility-service@ignoredIP:6001/drivenow-mobility-service/getroutes:::DriveNowControllerfindDistance', label: 'drivenow-mobility-service\n@ignoredIP:6001/drivenow-mobility-service/getroutes\nDriveNowController.findDistance', color:'lightgrey'},
+                {id: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::MapsControllerfindDistance', label: 'maps-helper-service\n@ignoredIP:7000/maps-helper-service/distance\nMapsController.findDistance', color:'lightgrey'},
+                {id: 'travelcompanion-mobility-service@ignoredIP:6002/maps-helper-service/distance:::GET', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/maps-helper-service/distance\nGET', color:'lightgrey'},
+                {id: 'travelcompanion-mobility-service@ignoredIP:6002/drivenow-mobility-service/getroutes:::GET', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/drivenow-mobility-service/getroutes\nGET', color:'lightgrey'},
+                {id: 'travelcompanion-mobility-service@ignoredIP:6002/deutschebahn-mobility-service/getroutes:::GET', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/deutschebahn-mobility-service/getroutes\nGET', color:'lightgrey'},
+                {id: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', title: 'someAdditionalInfo', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/travelcompanion-mobility-service/getroutes\nTravelCompanionController.getRoutes', color:'lightgrey'},
+                //{id: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::BasicErrorControllererror', label: 'maps-helper-service\n@ignoredIP:7000/maps-helper-service/distance\nBasicErrorController.error', color:'lightgrey'},
+                {id: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::null', label: 'zuul-service\n@ignoredIP:9000/travelcompanion-mobility-service/getroutes\nnull', color:'lightgrey'},
+                {id: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::POST', label: 'zuul-service\n@ignoredIP:9000/travelcompanion-mobility-service/getroutes\nPOST', color:'lightgrey'}
+
+
+
+            ]);
+
+            // create an array with edges
+            var edges = new vis.DataSet([
+                {from: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::null', to: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::POST', arrows:'to'},
+                {from: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::POST', to: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', arrows:'to'},
+                {from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'travelcompanion-mobility-service@ignoredIP:6002/drivenow-mobility-service/getroutes:::GET', arrows:'to'},
+                {from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'travelcompanion-mobility-service@ignoredIP:6002/deutschebahn-mobility-service/getroutes:::GET', arrows:'to'},
+                {from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'travelcompanion-mobility-service@ignoredIP:6002/maps-helper-service/distance:::GET', arrows:'to'},
+                {from: 'travelcompanion-mobility-service@ignoredIP:6002/deutschebahn-mobility-service/getroutes:::GET', to: 'deutschebahn-mobility-service@ignoredIP:6003/deutschebahn-mobility-service/getroutes:::DeutscheBahnControllerfindDistance', arrows:'to'},
+                {from: 'travelcompanion-mobility-service@ignoredIP:6002/drivenow-mobility-service/getroutes:::GET', to: 'drivenow-mobility-service@ignoredIP:6001/drivenow-mobility-service/getroutes:::DriveNowControllerfindDistance', arrows:'to'},
+                {from: 'travelcompanion-mobility-service@ignoredIP:6002/maps-helper-service/distance:::GET', to: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::MapsControllerfindDistance', arrows:'to'}
+
+                //{from: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::null', to: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', arrows:'to'},
+                //{from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'deutschebahn-mobility-service@ignoredIP:6003/deutschebahn-mobility-service/getroutes:::DeutscheBahnControllerfindDistance', arrows:'to'},
+                //{from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'drivenow-mobility-service@ignoredIP:6001/drivenow-mobility-service/getroutes:::DriveNowControllerfindDistance', arrows:'to'},
+                //{from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::MapsControllerfindDistance', arrows:'to'}
+            ]);
+
+
+
+
+
+            // create a network
+            var container = document.getElementById('mynetwork');
+
+            // provide the data in the vis format
+            var data = {
+                nodes: nodes,
+                edges: edges
+            };
+            var options = {
+              physics:{
+                enabled: false
+              },
+              layout:{improvedLayout:true,
+                      hierarchical: { enabled: true,
+                                      sortMethod:'directed',
+                                      parentCentralization: true,
+                                      nodeSpacing: 450,
+
+                                    }
+                                  },
+              edges:{
+                color: 'black'
+
+              },
+              nodes:{
+                chosen:{
+                  node:  function(values, id, selected, hovering) {
+                    if(selected){
+                      // alert(infoMap[id]);
+                      PopUp(infoMap[id]);
+                    }
+
+          }
+                }
+              }
+
+            };
+
+            // initialize your network!
+            var network = new vis.Network(container, data, options);
+            var nodes = network.body.nodes
+
+            var infoMap = {};
+
+
+
+            Object.keys(nodes).forEach(function(key){
+              var nodeOptions= {color:'lightgreen'}
+              nodes[key].setOptions(nodeOptions)
+              infoMap[key] = "";
+              //nodes[key].options.color.border ='lightgreen'
+            });
+
+            function PopUp(input){
+            var ScreenWidth=window.screen.width;
+            var ScreenHeight=window.screen.height;
+            var movefromedge=0;
+            placementx=(ScreenWidth/2)-((400)/2);
+            placementy=(ScreenHeight/2)-((300+50)/2);
+            WinPop=window.open("About:Blank","","width=400,height=300,toolbar=0,location=0,directories=0,status=0,scrollbars=0,menubar=0,resizable=0,left="+placementx+",top="+placementy+",scre enX="+placementx+",screenY="+placementy+",");
+            var SayWhat = "<p><font color='blue'>"+input+"</font></p>";
+            WinPop.document.write('<html>\n<head>\n</head>\n<body>'+SayWhat+'</body></html>');
+        }
+
+
+            var HttpClient = function() {
+                this.get = function(aUrl, aCallback) {
+                    var anHttpRequest = new XMLHttpRequest();
+                    anHttpRequest.onreadystatechange = function() {
+                        if (anHttpRequest.readyState == 4 && anHttpRequest.status == 200)
+                            aCallback(anHttpRequest.responseText);
+                    }
+
+                    anHttpRequest.open( "GET", aUrl, true );
+                    anHttpRequest.send( null );
+                }
+            }
+
+            var client = new HttpClient();
+              client.get('http://localhost:8081/anomalies/1', function(response) {
+                var json = JSON.parse(response);
+
+
+
+        //First color the error
+                json.forEach(function(anomalyJson){
+                    anomaly(anomalyJson.endpoint);
+                    if(anomalyJson.information!="bla"){
+                    var endpointInfo = infoMap[anomalyJson.endpoint];
+
+                    endpointInfo = endpointInfo + anomalyJson.information+"<br>";
+                    infoMap[anomalyJson.endpoint] = endpointInfo;
+        }
+
+                });
+                //then do the warnings to overcolor errors that do not fit
+                        json.forEach(function(anomalyJson){
+
+                            var warnings = JSON.parse(anomalyJson.warnings)
+
+                            warnings.forEach(function(warningString){
+
+                              warning(warningString)
+                            })
+                        });
+
+                network.redraw();
+            });
+
+
+
+
+
+            function anomaly(errorId){
+              if(nodes[errorId]){
+                var nodeOptions= {color:'orange'}
+                nodes[errorId].setOptions(nodeOptions)
+              //network.body.nodes[errorId].options.color.background ='red';
+              //network.body.nodes[errorId].options.color.border ='red';
+
+            }
+
+            }
+
+            function warning(warningId){
+              if(nodes[warningId]){
+                var nodeOptions= {color:'yellow'}
+                nodes[warningId].setOptions(nodeOptions);
+
+
+              //network.body.nodes[warningId].options.color.background ='yellow';
+              //network.body.nodes[warningId].options.color.border ='yellow';
+            }
+
+            }
+
+
+
+
+        </script>
+      </main>
+    </div>
+    <footer class="app-footer">
+
+</footer>
+
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+<script>window.jQuery || document.write('<script src="../../assets/js/vendor/jquery-slim.min.js"><\/script>')</script>
+
+<script src="../../assets/js/vendor/popper.min.js"></script>
+
+
+  <script src="../../dist/js/bootstrap.js"></script>
+
+
+<script src="../../assets/js/app.js"></script>
+
+
+  <script src="../../assets/js/vendor/anchor.min.js"></script>
+  <script src="../../assets/js/vendor/clipboard.min.js"></script>
+  <script src="../../assets/js/vendor/holder.min.js"></script>
+  <script src="../../assets/js/src/application.js"></script>
+
+
+<script src="../../assets/js/ie-emulation-modes-warning.js"></script>
+
+<script>
+Holder.addTheme('gray', {
+  bg: '#777',
+  fg: 'rgba(255,255,255,.75)',
+  font: 'Helvetica',
+  fontweight: 'normal'
+});
+</script>
+
+  </body>
+</html>

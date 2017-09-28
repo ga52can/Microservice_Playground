@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="generator" content="Jekyll v3.5.2">
+
+<title>Trigger Events</title>
+
+<!-- Icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/simple-line-icons/2.4.1/css/simple-line-icons.min.css" rel="stylesheet">
+
+<!-- CSS Style -->
+<link href="../../assets/css/style.min.css" rel="stylesheet">
+<link href="../../assets/css/docs.min.css" rel="stylesheet">
+
+
+  </head>
+  <body class="app header-fixed sidebar-fixed">
+    <header class="app-header navbar">
+  <button class="navbar-toggler mobile-sidebar-toggler d-lg-none" type="button">&#9776;</button>
+  <a class="navbar" href="#"></a>
+  <ul class="nav navbar-nav">
+    <li class="nav-item">
+      <a class="nav-link navbar-toggler sidebar-toggler" href="#">&#9776;</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="/index.html">Home</a>
+    </li>
+  </ul>
+  <ul class="navbar-nav ml-md-auto">
+
+  </ul>
+</header>
+
+    <div class="app-body">
+      <div class="sidebar">
+        <nav class="sidebar-nav" id="docsNavbarContent">
+  <ul class="nav">
+
+    <li class="nav-item nav-dropdown active">
+      <a class="nav-link nav-dropdown-toggle" href="#"><i class="icon-star"></i>
+        Anomaly Detection
+      </a>
+      <ul class="nav-dropdown-items">
+
+          <li class="nav-item active bd-sidenav-active">
+            <a class="nav-link" href="/vis-nice.html">
+              <i class="fa fa-empty" aria-hidden="true"></i> Visualization
+            </a>
+
+          </li>
+
+          <li class="nav-item ">
+            <a class="nav-link" href="/events.html">
+              <i class="fa fa-empty" aria-hidden="true"></i> Trigger Events
+            </a>
+
+          </li>
+
+      </ul>
+    </li>
+
+</nav>
+
+      </div>
+      <main class="main">
+        <div align="center" style="margin-top: 5%">
+          <button type="button" class="btn btn-primary" onclick="callGetRoutes('mapsController-distance-nullpointer')">Trigger Exception in Maps Service</button>
+          <button type="button" class="btn btn-primary" onclick="callGetRoutes('maps-highCPU')">Trigger High CPU for Maps Service</button>
+          <button type="button" class="btn btn-primary" onclick="callGetRoutes('mapsController-distance-200msDelay')">Trigger Delay in Maps Service</button>
+          <button type="button" class="btn btn-primary" onclick="callGetRoutes('drivenow-distance-nullpointer')">Trigger Exception in Drive Now Service</button>
+        </div>
+      </main>
+    </div>
+    <footer class="app-footer">
+
+</footer>
+
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js" crossorigin="anonymous"></script>
+<script>window.jQuery || document.write('<script src="../../assets/js/vendor/jquery-slim.min.js"><\/script>')</script>
+
+<script src="../../assets/js/vendor/popper.min.js"></script>
+
+
+  <script src="../../dist/js/bootstrap.js"></script>
+
+
+<script src="../../assets/js/app.js"></script>
+
+
+  <script src="../../assets/js/vendor/anchor.min.js"></script>
+  <script src="../../assets/js/vendor/clipboard.min.js"></script>
+  <script src="../../assets/js/vendor/holder.min.js"></script>
+  <script src="../../assets/js/src/application.js"></script>
+
+
+<script src="../../assets/js/ie-emulation-modes-warning.js"></script>
+
+<script>
+function callGetRoutes(info) {
+  $.post(
+  "http://localhost:9000/travelcompanion-mobility-service/getroutes",
+  { origin: 1, destination: 2, info: info },
+  function(data) {
+    console.log(data);
+
+  }
+);
+}
+</script>
+
+<script>
+Holder.addTheme('gray', {
+  bg: '#777',
+  fg: 'rgba(255,255,255,.75)',
+  font: 'Helvetica',
+  fontweight: 'normal'
+});
+</script>
+
+  </body>
+</html>

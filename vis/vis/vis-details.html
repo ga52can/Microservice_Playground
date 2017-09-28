@@ -1,0 +1,203 @@
+<html>
+<head>
+    <script type="text/javascript" src="vis.min.js"></script>
+    <link href="vis.min.css" rel="stylesheet" type="text/css" />
+
+    <style type="text/css">
+        #mynetwork {
+            width: 100%;
+            height: 100%;
+
+        }
+    </style>
+</head>
+<body>
+<div id="mynetwork"></div>
+
+<script type="text/javascript">
+    // create an array with nodes
+    var nodes = new vis.DataSet([
+        //{id:'business-core-service@ignoredIP:5000/business-core-service/businesses/list:::BusinessListControllergetServices', label: 'bcs:5000/bcs/businesses/list:::BLC-getServices', color:'lightgrey'},
+        //{id: 'zuul-service@ignoredIP:9000/business-core-service/businesses/list:::GET', label: 'zuul:9000/bcs/businesses/list:::GET', color:'lightgrey'},
+        //{id: 'zuul-service@ignoredIP:9000/business-core-service/businesses/list:::null', label: 'zuul:9000/business-core-service/businesses/list:::null', color:'lightgrey'},
+
+        //{id: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::BasicErrorControllererror', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/travelcompanion-mobility-service/getroutes\nBasicErrorController.error', color:'lightgrey'},
+
+        {id: 'deutschebahn-mobility-service@ignoredIP:6003/deutschebahn-mobility-service/getroutes:::DeutscheBahnControllerfindDistance', label: 'deutschebahn-mobility-service\n@ignoredIP:6003/deutschebahn-mobility-service/getroutes\nDeutscheBahnController.findDistance', color:'lightgrey'},
+        {id: 'drivenow-mobility-service@ignoredIP:6001/drivenow-mobility-service/getroutes:::DriveNowControllerfindDistance', label: 'drivenow-mobility-service\n@ignoredIP:6001/drivenow-mobility-service/getroutes\nDriveNowController.findDistance', color:'lightgrey'},
+        {id: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::MapsControllerfindDistance', label: 'maps-helper-service\n@ignoredIP:7000/maps-helper-service/distance\nMapsController.findDistance', color:'lightgrey'},
+        {id: 'travelcompanion-mobility-service@ignoredIP:6002/maps-helper-service/distance:::GET', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/maps-helper-service/distance\nGET', color:'lightgrey'},
+        {id: 'travelcompanion-mobility-service@ignoredIP:6002/drivenow-mobility-service/getroutes:::GET', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/drivenow-mobility-service/getroutes\nGET', color:'lightgrey'},
+        {id: 'travelcompanion-mobility-service@ignoredIP:6002/deutschebahn-mobility-service/getroutes:::GET', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/deutschebahn-mobility-service/getroutes\nGET', color:'lightgrey'},
+        {id: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', title: 'someAdditionalInfo', label: 'travelcompanion-mobility-service\n@ignoredIP:6002/travelcompanion-mobility-service/getroutes\nTravelCompanionController.getRoutes', color:'lightgrey'},
+        //{id: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::BasicErrorControllererror', label: 'maps-helper-service\n@ignoredIP:7000/maps-helper-service/distance\nBasicErrorController.error', color:'lightgrey'},
+        {id: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::null', label: 'zuul-service\n@ignoredIP:9000/travelcompanion-mobility-service/getroutes\nnull', color:'lightgrey'},
+        {id: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::POST', label: 'zuul-service\n@ignoredIP:9000/travelcompanion-mobility-service/getroutes\nPOST', color:'lightgrey'}
+
+
+
+    ]);
+
+    // create an array with edges
+    var edges = new vis.DataSet([
+        {from: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::null', to: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::POST', arrows:'to'},
+        {from: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::POST', to: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', arrows:'to'},
+        {from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'travelcompanion-mobility-service@ignoredIP:6002/drivenow-mobility-service/getroutes:::GET', arrows:'to'},
+        {from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'travelcompanion-mobility-service@ignoredIP:6002/deutschebahn-mobility-service/getroutes:::GET', arrows:'to'},
+        {from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'travelcompanion-mobility-service@ignoredIP:6002/maps-helper-service/distance:::GET', arrows:'to'},
+        {from: 'travelcompanion-mobility-service@ignoredIP:6002/deutschebahn-mobility-service/getroutes:::GET', to: 'deutschebahn-mobility-service@ignoredIP:6003/deutschebahn-mobility-service/getroutes:::DeutscheBahnControllerfindDistance', arrows:'to'},
+        {from: 'travelcompanion-mobility-service@ignoredIP:6002/drivenow-mobility-service/getroutes:::GET', to: 'drivenow-mobility-service@ignoredIP:6001/drivenow-mobility-service/getroutes:::DriveNowControllerfindDistance', arrows:'to'},
+        {from: 'travelcompanion-mobility-service@ignoredIP:6002/maps-helper-service/distance:::GET', to: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::MapsControllerfindDistance', arrows:'to'}
+
+        //{from: 'zuul-service@ignoredIP:9000/travelcompanion-mobility-service/getroutes:::null', to: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', arrows:'to'},
+        //{from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'deutschebahn-mobility-service@ignoredIP:6003/deutschebahn-mobility-service/getroutes:::DeutscheBahnControllerfindDistance', arrows:'to'},
+        //{from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'drivenow-mobility-service@ignoredIP:6001/drivenow-mobility-service/getroutes:::DriveNowControllerfindDistance', arrows:'to'},
+        //{from: 'travelcompanion-mobility-service@ignoredIP:6002/travelcompanion-mobility-service/getroutes:::TravelCompanionControllergetRoutes', to: 'maps-helper-service@ignoredIP:7000/maps-helper-service/distance:::MapsControllerfindDistance', arrows:'to'}
+    ]);
+
+
+
+
+
+    // create a network
+    var container = document.getElementById('mynetwork');
+
+    // provide the data in the vis format
+    var data = {
+        nodes: nodes,
+        edges: edges
+    };
+    var options = {
+      physics:{
+        enabled: false
+      },
+      layout:{improvedLayout:true,
+              hierarchical: { enabled: true,
+                              sortMethod:'directed',
+                              parentCentralization: true,
+                              nodeSpacing: 450,
+
+                            }
+                          },
+      edges:{
+        color: 'black'
+
+      },
+      nodes:{
+        chosen:{
+          node:  function(values, id, selected, hovering) {
+            if(selected){
+              // alert(infoMap[id]);
+              PopUp(infoMap[id]);
+            }
+
+  }
+        }
+      }
+
+    };
+
+    // initialize your network!
+    var network = new vis.Network(container, data, options);
+    var nodes = network.body.nodes
+
+    var infoMap = {};
+
+
+
+    Object.keys(nodes).forEach(function(key){
+      var nodeOptions= {color:'lightgreen'}
+      nodes[key].setOptions(nodeOptions)
+      infoMap[key] = "";
+      //nodes[key].options.color.border ='lightgreen'
+    });
+
+    function PopUp(input){
+    var ScreenWidth=window.screen.width;
+    var ScreenHeight=window.screen.height;
+    var movefromedge=0;
+    placementx=(ScreenWidth/2)-((400)/2);
+    placementy=(ScreenHeight/2)-((300+50)/2);
+    WinPop=window.open("About:Blank","","width=400,height=300,toolbar=0,location=0,directories=0,status=0,scrollbars=0,menubar=0,resizable=0,left="+placementx+",top="+placementy+",scre enX="+placementx+",screenY="+placementy+",");
+    var SayWhat = "<p><font color='blue'>"+input+"</font></p>";
+    WinPop.document.write('<html>\n<head>\n</head>\n<body>'+SayWhat+'</body></html>');
+}
+
+
+    var HttpClient = function() {
+        this.get = function(aUrl, aCallback) {
+            var anHttpRequest = new XMLHttpRequest();
+            anHttpRequest.onreadystatechange = function() {
+                if (anHttpRequest.readyState == 4 && anHttpRequest.status == 200)
+                    aCallback(anHttpRequest.responseText);
+            }
+
+            anHttpRequest.open( "GET", aUrl, true );
+            anHttpRequest.send( null );
+        }
+    }
+
+    var client = new HttpClient();
+      client.get('http://localhost:8080/anomalies/5000', function(response) {
+        var json = JSON.parse(response);
+
+
+
+//First color the error
+        json.forEach(function(anomalyJson){
+            anomaly(anomalyJson.endpoint);
+            if(anomalyJson.information!="splittedKMeans"){
+            var endpointInfo = infoMap[anomalyJson.endpoint];
+
+            endpointInfo = endpointInfo + anomalyJson.information+"<br>";
+            infoMap[anomalyJson.endpoint] = endpointInfo;
+}
+
+        });
+        //then do the warnings to overcolor errors that do not fit
+                json.forEach(function(anomalyJson){
+
+                    var warnings = JSON.parse(anomalyJson.warnings)
+
+                    warnings.forEach(function(warningString){
+
+                      warning(warningString)
+                    })
+                });
+
+        network.redraw();
+    });
+
+
+
+
+
+    function anomaly(errorId){
+      if(nodes[errorId]){
+        var nodeOptions= {color:'orange'}
+        nodes[errorId].setOptions(nodeOptions)
+      //network.body.nodes[errorId].options.color.background ='red';
+      //network.body.nodes[errorId].options.color.border ='red';
+
+    }
+
+    }
+
+    function warning(warningId){
+      if(nodes[warningId]){
+        var nodeOptions= {color:'yellow'}
+        nodes[warningId].setOptions(nodeOptions);
+
+
+      //network.body.nodes[warningId].options.color.background ='yellow';
+      //network.body.nodes[warningId].options.color.border ='yellow';
+    }
+
+    }
+
+
+
+
+</script>
+</body>
+</html>
