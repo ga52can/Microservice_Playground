@@ -1,12 +1,14 @@
 package com.sebis.gateway.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.sleuth.SpanAdjuster;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.web.context.request.RequestContextListener;
 
 import javax.sql.DataSource;
 
@@ -17,6 +19,15 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 
     @Autowired
     DataSource dataSource;
+
+    @Bean public RequestContextListener requestContextListener(){
+        return new RequestContextListener();
+    }
+
+    @Bean
+    SpanAdjuster customSpanAdjuster() {
+        return new CustomSpanAdjuster();
+    }
 
     @Override
     @Bean
@@ -48,4 +59,5 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .usersByUsernameQuery("select username, password, enabled from users where username=?")
                 .authoritiesByUsernameQuery("select username, role from user_roles where username=?");
     }
+
 }
