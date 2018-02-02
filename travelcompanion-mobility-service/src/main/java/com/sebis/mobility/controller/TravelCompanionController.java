@@ -7,7 +7,8 @@ import com.sebis.mobility.model.City;
 import com.sebis.mobility.model.Route;
 import com.sebis.mobility.model.RouteResults;
 import com.sebis.mobility.model.Travel;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
@@ -60,7 +61,7 @@ public class TravelCompanionController {
     private final static String DRIVE_NOW = "drive-now";
     private final static String DEUTSCHE_BAHN = "deutsche-bahn";
     private final ExecutorService pool = Executors.newFixedThreadPool(10);
-    private static Logger log = Logger.getLogger(TravelCompanionController.class.getName());
+    private static Logger log = LogManager.getLogger(TravelCompanionController.class.getName());
 
 
     @RequestMapping(value = {"/routes", "/travelcompanion-mobility-service/routes"}, method = RequestMethod.GET)
