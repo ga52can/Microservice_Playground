@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.web.context.request.RequestContextListener;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.sql.DataSource;
 
 
@@ -24,10 +25,12 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         return new RequestContextListener();
     }
 
+    /*
     @Bean
     SpanAdjuster customSpanAdjuster() {
         return new CustomSpanAdjuster();
     }
+*/
 
     @Override
     @Bean

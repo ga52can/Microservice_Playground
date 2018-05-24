@@ -3,6 +3,7 @@ package com.sebis.gateway.config;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.sleuth.Span;
 import org.springframework.cloud.sleuth.SpanAdjuster;
+import org.springframework.context.annotation.Bean;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -11,8 +12,12 @@ import javax.servlet.http.HttpServletRequest;
  */
 public class CustomSpanAdjuster implements SpanAdjuster {
 
-    @Autowired
     private HttpServletRequest request;
+
+    @Autowired
+    public CustomSpanAdjuster(HttpServletRequest request) {
+        this.request = request;
+    }
 
     @Override
     public Span adjust(Span span) {
